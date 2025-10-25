@@ -129,6 +129,116 @@ The QJSON Agents project is under active development, and we have many plans for
 
 The QJSON Agents project provides a powerful and flexible platform for building, managing, and deploying local-first AI agents. By giving users full control over their agents and their data, we hope to foster a more open, transparent, and user-centric AI ecosystem. We believe that the QJSON Agents project has the potential to democratize AI and empower users to create their own intelligent assistants.
 
+## 6. Plugin System (Slash-Command Extensions)
+
+### 6.1 Design Goals
+- Extend agent capabilities without forking the core runtime.
+- Keep plugins simple: pure‑Python modules shipped in‑tree, no heavy deps.
+- Unify UX: plugins register slash commands usable in `chat` and `exec`.
+
+### 6.2 Loader and Lifecycle
+- Discovery: `qjson_agents.plugin_manager.load_plugins()` scans `qjson_agents/plugins/` via `pkgutil.iter_modules`, imports modules, and instantiates subclasses of `Plugin`.
+- Base class: `Plugin` exposes `get_commands() -> Dict[str, Callable]` returning a map of `"/command"` → callable.
+- Tool injection: the CLI injects a small `tools` dict when constructing plugins (e.g., a `google_web_search` wrapper if provided by the host), allowing optional host integration without hard dependencies.
+- Dispatch: in `chat` and `exec`, the CLI merges `get_commands()` maps from all loaded plugins into `plugin_commands`; if a user input’s first token matches, the callable executes. Plugin commands appear automatically in `/help`.
+
+### 6.3 Environment Contracts (Inter‑Plugin Interop)
+- Active agent: `QJSON_AGENT_ID` is set by the CLI; plugins should index into this agent by default.
+- Results cache: set `QJSON_WEBSEARCH_RESULTS_ONCE` (JSON array of results) and `QJSON_WEBRESULTS_CACHE` (sticky copy) so `/open N` works across plugins and core.
+- Headers: `QJSON_WEBSEARCH_HEADER` for results and `QJSON_WEBOPEN_HEADER` for page content banners.
+- Page open policy: `QJSON_WEBOPEN_DEFAULT=text|raw` and one‑shot override `QJSON_WEBOPEN_MODE_ONCE`.
+
+### 6.4 Built‑in Plugins
+- Confluence Importer — `qjson_agents/plugins/confluence_importer.py`
+  - Command: `/confluence_import <PATH>` (file or directory, recursive).
+  - HTML: parsed to a DocOutline via `web_outliner.build_outline(html, url)`.
+  - `.md`/`.txt`: wrapped into a single‑section outline.
+  - Indexing: `web_indexer.upsert_outline(agent_id, outline)` chunks, indexes into retrieval, and persists to Fractal Memory (fmm.json).
+  - Output: summary string `imported=N skipped=M -> <AGENT_ID>`.
+
+- SharePoint Importer — `qjson_agents/plugins/sharepoint_importer.py`
+  - Command: `/sharepoint_import <PATH>` (same behavior as Confluence importer).
+  - Handles HTML, MD, TXT; indexes outlines into the active agent.
+
+- LangSearch Crawler — `qjson_agents/plugins/langsearch_crawler.py`
+  - Command: `/crawl <QUERY | URL... [depth=N] [pages=M] [export=DIR]>`.
+  - Modes:
+    - BFS crawl when URL seeds or `depth=`/`pages=` detected: fetch via `web_crawler.Crawler` with `robots.txt` + rate limiting; index via `upsert_outline`; optional per‑page JSON export.
+    - Web search when only a query: use LangSearch API (when `LANGSEARCH_API_KEY` is set), fallback to `googlesearch-python` else none. Arms one‑shot results for `/open`.
+  - Interop: populates `QJSON_WEBSEARCH_RESULTS_ONCE` and `QJSON_WEBRESULTS_CACHE` with normalized results and sets a header `QJSON_WEBSEARCH_HEADER`.
+
+### 6.5 DocOutline Format (summarized)
+- Produced by `web_outliner.build_outline(html, url)` or by importers for text files.
+- Keys: `url`, `title`, `subtitle?`, `sections[]` (level, title, text, anchors, figures), `dates[]` (published/updated), `lang`.
+- Indexer (`web_indexer.upsert_outline`) chunks section text (1000 chars, 150 overlap), writes to retrieval and under a structured fmm path `web/<host>/<YYYY>/<title>/<secN-hL>` with timestamps and hashes.
+
+## 7. Unified Web & Local Search (+ Crawl, Open, Index)
+
+### 7.1 User‑Facing Commands
+- `/engine mode=online|local` — sets default search mode; persisted in `state/env.json` as `QJSON_ENGINE_DEFAULT`.
+- `/find <QUERY or URL...> [mode=online|local depth=N pages=M export=DIR]` — unified entry: online web search, local filesystem search, or BFS crawl if URL seeds are present.
+- `/open N [ingest] [raw|text]` — fetch the Nth cached result, inject content for the next turn; optional `ingest` indexes content.
+
+### 7.2 Execution Model
+- Persistent preferences: the CLI stores small env overrides in `state/env.json` (e.g., engine mode, last results cache/header) with `_save_persistent_env`/`_load_persistent_env`.
+- One‑shot/sticky cache:
+  - After `/find` or plugin search, results are placed in `QJSON_WEBSEARCH_RESULTS_ONCE` (consumed once) and mirrored to `QJSON_WEBRESULTS_CACHE` (sticky) so `/open` works across sessions.
+  - `/open` sets `QJSON_WEBOPEN_TEXT_ONCE` with the fetched/outlined page text.
+
+### 7.3 Online Search Flow
+- Primary path: LangSearch API when `LANGSEARCH_API_KEY` is set, requesting `count=topk`, extracting `title/url/snippet/summary`.
+- Fallbacks: host `google_web_search` tool if available; else `googlesearch-python` URLs; final fallback is the local file search.
+- Optional fetch+index: if `QJSON_FIND_FETCH=1`, fetches top‑`N` (`QJSON_FIND_FETCH_TOP_N`) results via `Crawler(max_depth=0)`, outlines and indexes into the active agent.
+
+### 7.4 Local Search Flow (Offline)
+- Function: `_local_repo_search(query)` scans configured roots for quick filename/path and content matches.
+- Configuration:
+  - `QJSON_LOCAL_SEARCH_ROOTS` os.pathsep‑separated roots; defaults to `cwd`.
+  - Skips common heavy/transient directories: `state, logs, __pycache__, .venv, venv, node_modules, .git`, plus `QJSON_LOCAL_SEARCH_SKIP_DIRS`.
+  - `QJSON_LOCAL_SEARCH_MAX_FILES` cap (default 5000).
+- Results: up to `QJSON_WEB_TOPK`, each with `title` (relative path), `url` (path), `snippet`.
+
+### 7.5 Crawler Internals (Online BFS)
+- Class: `web_crawler.Crawler(rate_per_host=QJSON_CRAWL_RATE)` with per‑host rate limiting and `robots.txt` policy (`urllib.robotparser`).
+- BFS frontier of `(url, depth)` pairs up to `max_depth` and `max_pages`.
+- Fetch caps: `timeout=6s`, `max_bytes=~512 KB` default; decodes UTF‑8 with ignore fallback.
+- Link extraction: simple `href` regex + normalization; restrict via `allowed_domains` when provided by non‑interactive CLI.
+- Dedup: SHA1 over concatenated section bodies to avoid reinserting near‑duplicates.
+- Output: list of DocOutlines; the CLI and plugins index via `upsert_outline` and optionally write per‑page JSON with safe slugs.
+
+### 7.6 Outliner: HTML→DocOutline
+- Parser: built on `html.parser` (`web_outliner.py`) with a minimal DOM.
+- Title selection: prefers `<h1>`; falls back to `<title>`/OpenGraph; optional subtitle via first `<h2>` or meta description.
+- Sections: walks header nodes (h1..h6); collects following text (p/li/pre/code/blockquote/td), skipping nav/footers; stores `level/title/text`.
+- Dates: `<time datetime>` or regex for common published/updated patterns.
+- Language: default `en` (placeholder for future detection).
+
+### 7.7 Indexer: DocOutline→Fractal Memory + Retrieval
+- Chunking: 1000 chars with 150‑char overlap per section; each chunk becomes a memory with metadata (`doc_id`, `chunk_id`, `url`, `title`, `section`, `level`, `published_at`, `updated_at`, `crawl_at`, `lang`, `hash`).
+- Retrieval: `retrieval.add_memory(agent_id, text, meta)` embeds and writes to SQLite; IVF index metadata is persisted in `state/<id>/fmm.json` when available.
+- Fractal Memory path: `web/<host>/<YYYY>/<title or section>/sec<idx>-h<level>`; the `PersistentFractalMemory` persists structured payloads alongside retrieval.
+
+### 7.8 Open: Fetch, Outline/Text, Inject, Ingest
+- `/open N [ingest] [raw|text]` pulls the Nth result from cache, fetches with caps (`QJSON_WEBOPEN_TIMEOUT`, `QJSON_WEBOPEN_MAX_BYTES`, `QJSON_WEBOPEN_CAP`).
+- Policy: default `text` (outline extraction) unless `QJSON_WEBOPEN_DEFAULT=raw` or one‑shot `QJSON_WEBOPEN_MODE_ONCE=raw` is set; raw injects HTML as‑is, text injects the cleaned outline after body detection.
+- Injection: writes `QJSON_WEBOPEN_TEXT_ONCE` and banner `QJSON_WEBOPEN_HEADER` for the next prompt.
+- Ingest: when `ingest` is specified, prefers HTML→outline→`upsert_outline`; otherwise falls back to appending raw text into memory and retrieval.
+
+### 7.9 Retrieval and Ranking Notes
+- Storage: SQLite blobs with float32 embeddings (Ollama by default, hash fallback; optional transformers backend).
+- Hybrid scoring: cosine similarity plus optional TF‑IDF re‑rank (`QJSON_RETRIEVAL_HYBRID=tfidf`, `QJSON_RETRIEVAL_TFIDF_WEIGHT`), with optional freshness boost (`QJSON_RETRIEVAL_FRESH_BOOST`).
+- IVF/FMM: per‑agent FAISS‑like IVF index persisted under `fmm.json` (dim/K/nprobe metadata), rebuilt via the `reindex` command.
+
+### 7.10 Safety and Resource Guards
+- Robots & rate limits for crawl; conservative page fetch caps; outline‑first injection to minimize prompt bloat.
+- Local search guardrails: directory skips, file cap; web fetch timeouts and size caps are tunable via env.
+
+## 8. Implementation Cross‑References
+- Plugin base/loader: `qjson_agents/plugin_manager.py`.
+- Plugins: `qjson_agents/plugins/confluence_importer.py`, `.../sharepoint_importer.py`, `.../langsearch_crawler.py`.
+- CLI search/open/crawl: `qjson_agents/cli.py` (see `_engine_find`, `_perform_websearch`, `_arm_webopen_from_results`).
+- Crawler: `qjson_agents/web_crawler.py`. Outliner: `qjson_agents/web_outliner.py`. Indexer: `qjson_agents/web_indexer.py`. Ranking wrapper: `qjson_agents/web_ranker.py`.
+
 ## 9. References
 
 As an AI, I do not have access to external websites or the ability to browse the internet. Therefore, I am unable to provide a list of references. However, the concepts and technologies used in this project are based on well-established research in the fields of artificial intelligence, natural language processing, and information retrieval.
