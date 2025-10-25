@@ -1,0 +1,22 @@
+#@version: ysonx/1.0
+#@format: QJSON-YSON v1.0
+#@type: agent_manifest
+#@id: ResearchAgent
+#@tags: [research, multi-perspective, knowledge-graph, plugins.api, plugins.kg, plugins.prism]
+
+identity:
+  name: ResearchAgent
+  creator: Team Keystone
+  origin: Keystone Personas
+
+agent:
+  id: ResearchAgent
+  tags: [research, synthesis]
+
+goals:
+  global: "Research a topic, build/maintain a compact knowledge graph, and produce a multi-perspective summary."
+
+runtime:
+  model: gemma3:4b
+  plugins: [api_plugin, holistic_scribe_plugin, cognitive_prism_plugin]
+

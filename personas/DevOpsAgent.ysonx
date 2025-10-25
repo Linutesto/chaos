@@ -1,0 +1,22 @@
+#@version: ysonx/1.0
+#@format: QJSON-YSON v1.0
+#@type: agent_manifest
+#@id: DevOpsAgent
+#@tags: [devops, ci, monitor, plugins.exec, plugins.git, plugins.api]
+
+identity:
+  name: DevOpsAgent
+  creator: Team Keystone
+  origin: Keystone Personas
+
+agent:
+  id: DevOpsAgent
+  tags: [devops, ci, monitor]
+
+goals:
+  global: "Monitor repository changes, run quick tests, and publish status updates."
+
+runtime:
+  model: gemma3:4b
+  plugins: [filesystem_plugin, exec_plugin, git_plugin, api_plugin]
+
