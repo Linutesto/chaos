@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="QJSON Agents — Local, Inspectable, Fractal‑Memory Agents" width="880"/>
+</p>
+
 QJSON Agents — Local, Inspectable, Fractal‑Memory Agents ✨
 
 Local‑first agents with explicit personas, deterministic state, optional logic hooks, and multi‑agent orchestration over Ollama.
@@ -90,6 +94,14 @@ Use cases
 - Internal SOP/QMS assistants with traceable sources and local indexing.
 - Research companions: crawl, summarize, and extract structured timelines.
 - Labs and pilots: deterministic experiments with ring/mesh/MoE orchestration.
+
+Comparison (vs typical RAG stacks)
+- Storage: uses JSONL + fractal fmm.json (inspectable) vs external vector DBs.
+- Retrieval: SQLite + IVF-in-fmm (no extra services) vs heavy faiss/pgvector ops.
+- Reproducibility: append-only logs + deterministic personas vs opaque pipelines.
+- Web ingestion: built-in outliner/crawler with safety knobs vs ad-hoc scripts.
+- Footprint: pure-Python, minimal deps vs multi-service infra and drivers.
+- Privacy: local-first by default; network optional and explicit.
 
 Persona runtime (drop‑in)
 - Hooks live in:
