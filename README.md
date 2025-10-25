@@ -103,6 +103,10 @@ Comparison (vs typical RAG stacks)
 - Footprint: pure-Python, minimal deps vs multi-service infra and drivers.
 - Privacy: local-first by default; network optional and explicit.
 
+Roadmap
+- See docs/ROADMAP.md for near-, mid-term, and exploratory plans.
+- Brand assets: `assets/logo-mark.svg` (favicon/logo), `assets/banner.svg` (hero).
+
 Persona runtime (drop‑in)
 - Hooks live in:
   - qjson_agents/logic/common_utils.py
