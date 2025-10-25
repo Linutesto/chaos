@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qjson-agents.local/docs/schemas/cluster_run.schema.json",
+  "title": "QJSON Cluster Run (logs/cluster_run_*.json)",
+  "type": "object",
+  "properties": {
+    "agents": { "type": "array", "items": { "type": "string" } },
+    "model": { "type": "string" },
+    "use_ollama": { "type": "boolean" },
+    "ticks": { "type": "integer" },
+    "elapsed_sec": { "type": "number" },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "chat": { "type": "integer" },
+          "errors": { "type": "integer" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/Event" } }
+  },
+  "required": ["agents", "model", "ticks", "elapsed_sec", "counts", "events"],
+  "additionalProperties": true,
+  "$defs": {
+    "BaseEvent": {
+      "type": "object",
+      "properties": { "t": { "type": "number" }, "type": { "type": "string" } },
+      "required": ["t", "type"],
+      "additionalProperties": true
+    },
+    "HandoffEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "handoff" },
+            "from": { "type": "string" },
+            "to": { "type": "string" },
+            "prompt": { "type": "string" },
+            "reply": { "type": "string" },
+            "tick": { "type": "integer" }
+          },
+          "required": ["from", "to", "prompt", "reply", "tick"]
+        }
+      ]
+    },
+    "BroadcastEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "broadcast" },
+            "from": { "type": "string" },
+            "to": { "type": "string" },
+            "prompt": { "type": "string" },
+            "reply": { "type": "string" },
+            "tick": { "type": "integer" }
+          },
+          "required": ["from", "to", "prompt", "reply", "tick"]
+        }
+      ]
+    },
+    "MoeEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "moe" },
+            "expert": { "type": "string" },
+            "prompt": { "type": "string" },
+            "reply": { "type": "string" },
+            "tick": { "type": "integer" },
+            "router_scores": { "type": "object", "additionalProperties": { "type": "number" } }
+          },
+          "required": ["expert", "reply", "tick"]
+        }
+      ]
+    },
+    "AggregateEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "aggregate" },
+            "summarizer": { "type": "string" },
+            "prompt": { "type": "string" },
+            "reply": { "type": "string" },
+            "tick": { "type": "integer" }
+          },
+          "required": ["summarizer", "reply", "tick"]
+        }
+      ]
+    },
+    "InputGoalEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "input_goal" },
+            "text": { "type": "string" }
+          },
+          "required": ["text"]
+        }
+      ]
+    },
+    "ErrorEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "error" },
+            "agent": { "type": "string" },
+            "error": { "type": "string" }
+          },
+          "required": ["error"]
+        }
+      ]
+    },
+    "Event": {
+      "oneOf": [
+        { "$ref": "#/$defs/HandoffEvent" },
+        { "$ref": "#/$defs/BroadcastEvent" },
+        { "$ref": "#/$defs/MoeEvent" },
+        { "$ref": "#/$defs/AggregateEvent" },
+        { "$ref": "#/$defs/InputGoalEvent" },
+        { "$ref": "#/$defs/ErrorEvent" }
+      ]
+    }
+  }
+}
+

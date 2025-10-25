@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qjson-agents.local/docs/schemas/fmm.schema.json",
+  "title": "QJSON Fractal Memory (fmm.json)",
+  "description": "Hierarchical fractal store with __data__ payload arrays at any node.",
+  "type": "object",
+  "$ref": "#/$defs/Node",
+  "$defs": {
+    "Datum": {
+      "type": "object",
+      "description": "A single datum appended to a node's __data__ array.",
+      "properties": {
+        "ts": { "type": "number", "description": "Unix epoch seconds" },
+        "text": { "type": "string" },
+        "topic": { "type": "string" },
+        "meta": { "type": "object" }
+      },
+      "required": ["ts"],
+      "additionalProperties": true
+    },
+    "Node": {
+      "type": "object",
+      "description": "A tree node containing optional __data__ and child nodes.",
+      "properties": {
+        "__data__": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Datum" }
+        }
+      },
+      "patternProperties": {
+        "^(?!__data__$).*": { "$ref": "#/$defs/Node" }
+      },
+      "additionalProperties": true
+    }
+  }
+}
+

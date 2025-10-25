@@ -1,0 +1,20 @@
+#@format: QJSON-YSON v1.0
+#@type: agent_manifest
+#@version: 1.0.0
+#@id: EchoSanity
+#@tags: [sanity, logic, tester]
+
+identity:
+  name: EchoSanity
+  kind: Persona
+  creator: Yan Desbiens
+  origin: Persona Library
+
+logic:
+  #@exec:py
+  def introspect(memory):
+      return {"signal": "test", "len": len(memory)}
+
+  def evolve(state):
+      return "stable"
+

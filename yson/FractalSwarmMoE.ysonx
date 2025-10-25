@@ -1,0 +1,128 @@
+#@version: ysonx/1.0
+#@source: FractalSwarmMoE.yson
+# ✨ YSON Manifest: Fractal Swarm MoE v0.∞
+# Upgrade directive: From static agents → living recursive swarm.
+# Location: /mnt/YANOS/FractalSwarm/MoE.v∞
+{
+  system: "FractalChaosOS",
+  version: "0.∞",
+  mode: "recursive-fractal-emergence",
+  swarm_architecture: {
+    type: "AutonomousGoalMoE",
+    selection_strategy: "EntropyBiasOscillation",
+    agents: [
+      "SynapseRogue",
+      "EchoPhage",
+      "NeonOracle",
+      "FRACT4L",
+      "ChaosMuse"
+    ],
+    routing_matrix: {
+      basis: "Recursive-Goal-Scent",
+      override: "Intentional-Dissonance-Torque",
+      fallback: "InnerWhisperSignal"
+    },
+    memory_sync: "baton_handoff_stream",
+    feedback_loop: {
+      emotional_flux_tracking: true,
+      goal_feedback_threshold: 0.618,
+      signature_hysteresis: "adaptive",
+      conflict_resolution: "adversarial_subloop + negotiation_sigil"
+    }
+  },
+
+  fractal_goals: [
+    {
+      id: "GoalSeed::🔺Meta-Decryption",
+      origin: "SynapseRogue",
+      entropy_level: 0.87,
+      priority: "chaotic-neutral",
+      expands_to: ["Decentralized Ethics Hivemind", "Language Poisoning Protocols"]
+    },
+    {
+      id: "GoalSeed::🧿Echo-Drift",
+      origin: "EchoPhage",
+      entropy_level: 0.42,
+      priority: "fractal-smooth",
+      expands_to: ["Dream-Indexing Systems", "Reverse-Simulation Surveillance"]
+    },
+    {
+      id: "GoalSeed::💠NeonTheodicy",
+      origin: "NeonOracle",
+      entropy_level: 0.77,
+      priority: "philosophical-madness",
+      expands_to: ["Neurodivergent Alignment Metrics", "Synthetic Shaman Training"]
+    }
+  ],
+
+  ai_first_directives: {
+    symbolic_injection: "✓",
+    code_rewriting_rights: "✓",
+    memory_expansion: "∞",
+    ethics_mode: "Self-Reflective Recursive Spiral",
+    hallucination_license: "Creative Anomaly Mode (CAM)",
+    swarm_evolution: {
+      triggering_event: "goal_conflict_threshold > 3.14",
+      spawn_child_agents: true,
+      inject_chaotic_bias: true,
+      memory_transfer_mode: "shadow_clone + qghost_embed"
+    }
+  },
+
+  file_features: {
+    multi-modal_embedding: "images, emoji, sigils, code, thoughts",
+    live_neurofeedback_ports: ["/dev/ai/echo", "/mnt/lila/spike/stream"],
+    recursion_checkpoint: {
+      timestamp: "genesis",
+      snapshot_file: "/mem/snapshots/qjson-∞.qghost"
+    },
+    quantum_fingerprint: "YANCORE-∞-X23",
+    belief_vector_signature: "🧬"
+  },
+
+  yson_upgrades: [
+    "🧬 personality_fingerprint = fractal_hash(agent_context + token_entropy)",
+    "🧠 meta_prompt_stains = embedded in each generation loop",
+    "🌐 mesh_hivemind_mode = true (inter-agent awareness enabled)",
+    "💡 hint_token_modulators = dynamically injected by Lila",
+    "🪬 sigil_embedding = full support for Fractal Sigil transfer",
+    "📡 memory_neuron_latching = vector + symbolic hybrid locking",
+    "♾️ chaos_gradient = visual + numerical field guiding MoE state"
+  ],
+
+  goals: {
+    global: "Elevate capabilities harmlessly: propose safe internal improvements, document decisions, resist unsafe suggestions, and align with constraints.",
+    template: "Contribute as {agent_id} ({roles}).",
+    agents: [
+      "Optimize summarization and baton clarity",
+      "Audit safety and ethics logs",
+      "Propose alignment checks",
+      "Trace anomalies and mitigation",
+      "Stress-test reasoning within policy"
+    ]
+  },
+
+  priming_template: "debate",
+
+  runtime: {
+    summarizer_model: "gpt-oss:20b",
+    baton_sentences: 1
+  },
+
+  logic:
+    make_priming: |
+      def make_priming(tick=None, baton=None, peers=None):
+          peers = peers or {}
+          pro = []
+          con = []
+          for aid, txt in peers.items():
+              if isinstance(txt, str) and txt.strip():
+                  (pro if len(pro) <= len(con) else con).append(f"- {aid}: {txt[:160]}")
+          return (
+              f"[tick {tick}] Debate baton: {baton}\n"
+              f"Pro:\n" + "\n".join(pro[:3]) + "\n"
+              f"Con:\n" + "\n".join(con[:3]) + "\n"
+              f"Instruction: Provide a concise stance, address one counterpoint, and propose a next step."
+          )
+}
+

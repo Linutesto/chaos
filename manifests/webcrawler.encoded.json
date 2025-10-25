@@ -1,0 +1,20 @@
+{
+  "format": "QJSON-FE-v1",
+  "params": {
+    "depth": 2,
+    "fanout": 3
+  },
+  "salt": "XKSZO4lkk6Ei4SAktp/Pdw==",
+  "blocks": [
+    "/ph2OssOD7fSKSUbbdlahRD8dxRWTGeHH9a5BOLfM/Eqek8WVqCEoVSpLKehotkOeVAgkzH5zrly/aPSeFha",
+    "KhkMPgSFgqZXrGmYlNDVb2RNKdRu+ZeQNfO1zm8IFl/km11gXVyMaRmbEQcHYiqzjqbHM5ShtV0vrQ9UyAku",
+    "988UMBwYz3Uf1h0LBWc5sJXh6D2a5b1ZNrcPSJtccbx/RV3topnWm4z9HYKlMMxtM7I52ysyXSFnqAYicsfo",
+    "MWhL+rafwNDA7DCapXGBfj/kbME2Kld4NpEGJnff7ERv/DA5KDsRZsE+rz8Aws4N8EiwWmNQYzTzw76rJJA=",
+    "IbcqOXl1BHbYPqN/ENuLHOVIv1pVRGN+vpe0rDfd3Y1xauWmkj5EvlStszfWhQ47wj/lCcmrpmF/MAbHMgw=",
+    "PCT/uJExTrxJ7NZ81p4FZMA78gmZ/O1qeywYx3xPWi3l4Zbgi8mYTGhSpUPxQITlKt1rti0cunaZJXZaSh8=",
+    "+uGL8Zzb3xEdEajOA7yooSrLa7stHLhqymYvcwc86d0zbgat+UwxhzHi4mlqv0vp1D7YoRBbuqK/uAadNHo=",
+    "MH4HufUDL4Z8uq9YYKBRuIw87q4MQ6mqsr0KmiQoTv2/SgBwET/IPcp5UtVaiF7okfhCPtVBoM0RR2VyOaU=",
+    "pkwZZFQz3W7OcR6aVcZd6p/kDS7IFbfUBFAzLTm8ij2DYFBe6WLoB2ESVIoOfhA1CPBRZ5foZAUg/7IkAZk="
+  ],
+  "mac": "0C33Ctkb1bMwYuo5qyKMC1wD5i162Koc3I/jFQRGx0k="
+}

@@ -1,0 +1,21 @@
+#@format: QJSON-YSON v1.0
+#@type: agent_manifest
+#@version: 1.0.0
+#@id: NyxEcho
+#@tags: [shadow, archivist, echo]
+
+identity:
+  name: NyxEcho
+  kind: Persona
+  creator: Yan Desbiens
+  origin: Persona Library
+
+logic:
+  #@exec:py
+  def introspect(memory):
+      echoes = [m for m in memory if 'echo' in str(m).lower()]
+      return {"signal": "scan", "echo_hits": len(echoes)}
+
+  def evolve(state):
+      return "stable"
+

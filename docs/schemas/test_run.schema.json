@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qjson-agents.local/docs/schemas/test_run.schema.json",
+  "title": "QJSON Test Harness Run (logs/test_run_*.json)",
+  "type": "object",
+  "properties": {
+    "agent_id": { "type": "string" },
+    "start_ts": { "type": "number" },
+    "end_ts": { "type": "number" },
+    "elapsed_sec": { "type": "number" },
+    "counts": {
+      "type": "object",
+      "properties": {
+        "chat": { "type": "integer" },
+        "fork": { "type": "integer" },
+        "status": { "type": "integer" },
+        "errors": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Event" }
+    },
+    "logs": {
+      "type": "object",
+      "properties": {
+        "txt": { "type": "string" },
+        "json": { "type": "string" },
+        "log": { "type": "string" }
+      },
+      "required": ["txt", "json", "log"],
+      "additionalProperties": true
+    }
+  },
+  "required": ["agent_id", "start_ts", "end_ts", "elapsed_sec", "counts", "events"],
+  "additionalProperties": true,
+  "$defs": {
+    "Event": {
+      "oneOf": [
+        { "$ref": "#/$defs/ChatEvent" },
+        { "$ref": "#/$defs/StatusEvent" },
+        { "$ref": "#/$defs/ForkEvent" },
+        { "$ref": "#/$defs/ErrorEvent" }
+      ]
+    },
+    "BaseEvent": {
+      "type": "object",
+      "properties": { "t": { "type": "number" }, "type": { "type": "string" } },
+      "required": ["t", "type"],
+      "additionalProperties": true
+    },
+    "ChatEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "chat" },
+            "prompt": { "type": "string" },
+            "reply": { "type": "string" }
+          },
+          "required": ["prompt", "reply"]
+        }
+      ]
+    },
+    "StatusEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "status" },
+            "tail_mem": { "type": "integer" },
+            "tail_ev": { "type": "integer" }
+          },
+          "required": ["tail_mem", "tail_ev"]
+        }
+      ]
+    },
+    "ForkEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "fork" },
+            "child_id": { "type": "string" }
+          },
+          "required": ["child_id"]
+        }
+      ]
+    },
+    "ErrorEvent": {
+      "allOf": [
+        { "$ref": "#/$defs/BaseEvent" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "error" },
+            "error": { "type": "string" }
+          },
+          "required": ["error"]
+        }
+      ]
+    }
+  }
+}
+

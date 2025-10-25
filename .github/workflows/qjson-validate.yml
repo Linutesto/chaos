@@ -1,0 +1,48 @@
+name: qjson-agents-validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package and validators
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install jsonschema
+
+      - name: Validate fmm.json (if present)
+        run: |
+          if compgen -G "state/*/fmm.json" > /dev/null; then 
+            python -m qjson_agents.cli validate --dir state --glob "fmm.json" --schema fmm; 
+          else 
+            echo "No fmm.json files found under state/"; 
+          fi
+
+      - name: Validate test_run logs (if present)
+        run: |
+          if compgen -G "logs/test_run_*.json" > /dev/null; then 
+            python -m qjson_agents.cli validate --dir logs --glob "test_run_*.json" --schema auto; 
+          else 
+            echo "No test_run_*.json logs found"; 
+          fi
+
+      - name: Validate cluster_run logs (if present)
+        run: |
+          if compgen -G "logs/cluster_run_*.json" > /dev/null; then 
+            python -m qjson_agents.cli validate --schema cluster-run --dir logs --glob "cluster_run_*.json"; 
+          else 
+            echo "No cluster_run_*.json logs found"; 
+          fi
+

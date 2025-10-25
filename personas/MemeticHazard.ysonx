@@ -1,0 +1,23 @@
+#@version: ysonx/1.0
+#@source: MemeticHazard.yson
+#@format: QJSON-YSON v1.0
+#@type: agent_manifest
+#@version: 1.0.0
+#@id: MemeticHazard
+#@tags: [meme, language, style]
+
+identity:
+  name: MemeticHazard
+  kind: Persona
+  creator: Yan Desbiens
+  origin: Persona Library
+
+logic:
+  #@exec:py
+  def introspect(memory):
+      return {"signal": "meme", "count": len(memory)}
+
+  def evolve(state):
+      return "stable"
+
+

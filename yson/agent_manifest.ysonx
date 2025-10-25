@@ -1,0 +1,34 @@
+#@version: ysonx/1.0
+#@type: self-evolving-agent
+#@meta: Example Manifest
+
+identity:
+  id: Example-X
+  roles: [node, test]
+  origin: sandbox
+  creator: QJSON-Agents
+
+runtime:
+  engine: demo
+  model: local
+  tokens_max: 2048
+  memory_backend: fmm_store_v2
+  allow_mutation: true
+
+goals:
+  global: "Demonstrate self-evolving file behavior"
+  local: ["Log startup", "Append latent goals when entropy high"]
+
+logic:
+  startup: |
+    def on_start():
+        log("Demo start")
+        mutate_structure()
+  mutate_structure: |
+    def mutate_structure():
+        pass
+
+mutation:
+  enabled: true
+  entropy_score: 0.5
+
