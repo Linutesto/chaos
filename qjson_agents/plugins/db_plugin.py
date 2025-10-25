@@ -90,10 +90,20 @@ class SQLitePlugin(Plugin):
         con = self._ensure()
         if not con:
             return "[sql] no open connection; use /sql_open <PATH>"
-        sql = parts[0]
+        # Collect SQL tokens until an option token (key=value)
+        sql_tokens: List[str] = []
+        opts: List[str] = []
+        for p in parts:
+            if "=" in p and p.split("=", 1)[0] in ("max","json"):
+                opts.append(p)
+            else:
+                sql_tokens.append(p)
+        sql = " ".join(sql_tokens).strip()
+        if not sql:
+            return "[sql] empty SQL"
         max_rows = 200
         as_json = False
-        for p in parts[1:]:
+        for p in opts:
             if p.startswith("max="):
                 try:
                     max_rows = max(1, int(p.split("=", 1)[1]))
@@ -117,4 +127,3 @@ class SQLitePlugin(Plugin):
             return "\n".join(lines)
         except Exception as e:
             return f"[sql] error: {e}"
-
