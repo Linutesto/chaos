@@ -1,4 +1,4 @@
-QJSON Agents — Local, Inspectable, Fractal‑Memory Agents
+QJSON Agents — Local, Inspectable, Fractal‑Memory Agents ✨
 
 Local‑first agents with explicit personas, deterministic state, optional logic hooks, and multi‑agent orchestration over Ollama.
 
@@ -21,6 +21,14 @@ Important
 Prerequisites
 - Python 3.10+
 - Ollama running at http://localhost:11434 (defaults)
+
+Get Started in 30s
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e .
+# quick demo (set your docs folder if you have one)
+AGENT_ID=HealthcareDemo DOCS_DIR=./demo/healthcare_docs bash scripts/healthcare_demo.sh || true
+```
 
 Install
 ```bash
@@ -71,6 +79,17 @@ qjson-agents validate --schema cluster-run --dir logs --glob "cluster_run_*.json
 ```
  - market.md — market brief
  - analysis.md — technical analysis
+
+Why QJSON Agents
+- Local-first and inspectable: JSONL logs and fractal memory you can diff.
+- Deterministic personas: manifests + optional logic hooks (assist/replace modes).
+- Practical retrieval: SQLite + IVF acceleration without heavy dependencies.
+- Built-in web tooling: safe outliner, crawler, and one-shot injections.
+
+Use cases
+- Internal SOP/QMS assistants with traceable sources and local indexing.
+- Research companions: crawl, summarize, and extract structured timelines.
+- Labs and pilots: deterministic experiments with ring/mesh/MoE orchestration.
 
 Persona runtime (drop‑in)
 - Hooks live in:
