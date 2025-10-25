@@ -45,3 +45,11 @@ Releasing
 - Ensure `pyproject.toml` has the correct version.
 - Regenerate `qjson_agents.egg-info` by reinstalling in editable mode if packaging.
 - Tag and provide a changelog; do not include large logs or state directories in source releases.
+
+CI validation modes
+- Workflow: `.github/workflows/qjson-validate.yml` validates `state/*/fmm.json`, `logs/test_run_*.json`, and `logs/cluster_run_*.json`.
+- Default behavior: strict on invalid files (fails the job), lenient on missing files (skips with a message).
+- Make missing files strict: remove the `if compgen ...` guards so the step runs unconditionally (and fails if files aren’t present).
+- Make invalid files warn-only: append `|| echo "warn: validation failed"` and `|| true` to each validate command.
+- Example (warn-only):
+  - `python -m qjson_agents.cli validate --dir logs --glob "cluster_run_*.json" --schema cluster-run || echo "warn: invalid cluster_run logs" || true`

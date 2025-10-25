@@ -42,6 +42,7 @@ Badges
 ![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![Local-first](https://img.shields.io/badge/local--first-true-brightgreen)
 ![No external deps (core)](https://img.shields.io/badge/external%20deps%20(core)-none-lightgrey)
+[![Validate](https://github.com/Linutesto/chaos/actions/workflows/qjson-validate.yml/badge.svg)](https://github.com/Linutesto/chaos/actions/workflows/qjson-validate.yml)
 
 FAQ/Troubleshooting
 - **403 or empty page?** → try `--ua` / disable JS; check robots; increase `QJSON_WEBOPEN_TIMEOUT`.
