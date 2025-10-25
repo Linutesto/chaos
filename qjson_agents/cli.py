@@ -1978,6 +1978,90 @@ def cmd_models(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_semi(args: argparse.Namespace) -> int:
+    """Run a semi-autonomous loop with a plugin whitelist and early-stop heuristics."""
+    agent_id = args.id
+    manifest_path = Path(args.manifest) if args.manifest else None
+
+    if manifest_path and manifest_path.exists():
+        if manifest_path.suffix.lower() in (".yson", ".ysonx"):
+            manifest = yson_to_manifest(manifest_path)
+        else:
+            manifest = load_manifest(manifest_path)
+        if args.model:
+            manifest.setdefault("runtime", {})["model"] = args.model
+        agent = Agent(manifest)
+    else:
+        mpath = agent_dir(agent_id) / "manifest.json"
+        if not mpath.exists():
+            _print("No manifest found. Provide --manifest to initialize.")
+            return 2
+        manifest = json.loads(mpath.read_text(encoding="utf-8"))
+        if args.model:
+            manifest.setdefault("runtime", {})["model"] = args.model
+        agent = Agent(manifest)
+
+    # Apply plugin gating envs
+    if args.plugins:
+        os.environ["QJSON_PLUGIN_ALLOW"] = ",".join([s.strip() for s in args.plugins.split(",") if s.strip()])
+    if args.allow_exec:
+        os.environ["QJSON_ALLOW_EXEC"] = "1"
+    if args.allow_net:
+        os.environ["QJSON_ALLOW_NET"] = "1"
+    if args.fs_roots:
+        os.environ["QJSON_FS_ROOTS"] = args.fs_roots
+    if args.fs_write:
+        os.environ["QJSON_FS_WRITE"] = "1"
+    if args.git_root:
+        os.environ["QJSON_GIT_ROOT"] = args.git_root
+
+    # Resolve model automatically if needed
+    chosen_model = None
+    if args.model in (None, "auto"):
+        try:
+            client = OllamaClient()
+            models = client.tags()
+            if models:
+                chosen_model = models[0].get("name") or models[0].get("model")
+                _print(f"[models] selected: {chosen_model}")
+        except Exception:
+            pass
+
+    goal = args.goal or "Execute the task safely using available tools."
+    iters = max(1, int(args.iterations))
+    delay = float(args.delay)
+    stop_token = (args.stop_token or "need more info").strip().lower()
+    _print(f"[semi] starting for {agent.agent_id}: {iters} iterations; stop on '{stop_token}'")
+
+    from .memory import append_jsonl, _now_ts
+    append_jsonl(agent_dir(agent.agent_id) / "events.jsonl", {"ts": _now_ts(), "type": "semi_start", "meta": {"goal": goal, "iterations": iters}})
+
+    import time
+    for i in range(1, iters + 1):
+        user = (
+            f"Semi-autonomous tick {i}/{iters}. Goal: {goal}. "
+            f"Use available tools as needed and state next steps."
+        )
+        _print(f"tick {i} > {user}")
+        try:
+            model_override = chosen_model or args.model
+            reply = agent.chat_turn(user, model_override=model_override)
+        except Exception as e:
+            _print(f"[error] {e}")
+            break
+        _print(f"{agent.agent_id} > {reply}\n")
+        low = (reply or "").lower()
+        if (stop_token and stop_token in low) or ("need more information" in low) or ("clarify" in low and "need" in low):
+            _print("[semi] early stop: agent requested more information.")
+            break
+        if delay > 0:
+            time.sleep(delay)
+
+    append_jsonl(agent_dir(agent.agent_id) / "events.jsonl", {"ts": _now_ts(), "type": "semi_end", "meta": {"goal": goal, "iterations": iters}})
+    _print("[semi] complete.")
+    return 0
+
+
 def cmd_test(args: argparse.Namespace, default_api: Any = None) -> int:
     """Run a local, network-free test harness for ~duration seconds.
 
@@ -3666,6 +3750,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
     sp.add_argument("--iterations", type=int, default=3, help="Number of iterations to run")
     sp.add_argument("--delay", type=float, default=0.0, help="Seconds to sleep between iterations")
     sp.set_defaults(func=cmd_loop)
+
+    sp = sub.add_parser("semi", help="Run a semi-autonomous loop with plugin gating and early-stop")
+    sp.add_argument("--id", required=False, default="Lila-v∞", help="Agent ID to use")
+    sp.add_argument("--manifest", required=False, help="Optional manifest path to (re)initialize")
+    sp.add_argument("--model", default=None, help="Model name or 'auto' to select from /api/tags")
+    sp.add_argument("--goal", required=False, default="execute the task", help="Semi-autonomous goal")
+    sp.add_argument("--iterations", type=int, default=3, help="Max iterations")
+    sp.add_argument("--delay", type=float, default=0.0, help="Delay between iterations")
+    sp.add_argument("--plugins", required=False, help="Comma-separated whitelist of plugin commands (e.g., /fs_list,/py,/git_status)")
+    sp.add_argument("--stop-token", dest="stop_token", required=False, help="Early stop token (default 'need more info')")
+    # Optional env gates
+    sp.add_argument("--allow-exec", action="store_true", help="Enable QJSON_ALLOW_EXEC=1")
+    sp.add_argument("--allow-net", action="store_true", help="Enable QJSON_ALLOW_NET=1")
+    sp.add_argument("--fs-roots", required=False, help="Set QJSON_FS_ROOTS")
+    sp.add_argument("--fs-write", action="store_true", help="Enable QJSON_FS_WRITE=1")
+    sp.add_argument("--git-root", required=False, help="Set QJSON_GIT_ROOT")
+    sp.set_defaults(func=cmd_semi)
 
     sp = sub.add_parser("models", help="List installed Ollama models via /api/tags")
     sp.set_defaults(func=cmd_models)

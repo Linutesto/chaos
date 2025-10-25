@@ -11,6 +11,7 @@ Core commands
 - chat — Interactive chat with slash commands
 - status — Show agent status and recent memory/events
 - loop — Run an autonomous loop for N iterations
+- semi — Run a semi‑autonomous loop with plugin gating and early‑stop
 - fork — Fork an existing agent’s persona/state
 - swap — Swap an agent’s persona by id/path/tag
 - evolve — Mutate persona per rules (optionally adopt)
@@ -93,6 +94,13 @@ Menu
 - The text UI mirrors these flags interactively and caches small preferences.
 - Agent Management → “retrieval settings” lets you enable retrieval, set top‑k/decay/min, IVF K/nprobe/reindex threshold, and seed embeddings on ingest. Settings persist and are applied to new sessions launched from the menu. You can also trigger an on‑demand IVF rebuild.
 - Search & Crawl Settings → set default search mode (online/local), web top‑k, page fetch caps (timeout/max bytes/injected chars), crawl rate per host, and LangSearch API key. You can also launch a one‑shot non‑interactive crawl and clear cached results.
+- Plugins & Tools → quick access to built‑in plugins:
+  - File System: set roots, list/read/write (writes gated by QJSON_FS_WRITE)
+  - Exec (Python): toggle QJSON_ALLOW_EXEC and run inline code or @file.py
+  - Git: set repo root and run status/log/diff
+  - Generic API: toggle QJSON_ALLOW_NET and run GET/POST
+  - SQLite DB: open/tables/query/close using a stateful menu instance
+  - Advanced: Forge (create/delegate/report), Prism (hats/auto), Holistic‑Scribe (/kg), Continuum (export/import), Meme‑Weaver (analyze/generate)
 
 Env vars
 - OLLAMA_BASE_URL=http://localhost:11434
@@ -151,3 +159,14 @@ Examples
   - `/open 1`
 - Post‑search fetch and indexing
   - `QJSON_FIND_FETCH=1 QJSON_FIND_FETCH_TOP_N=2` then `/find topic`
+
+Custom (semi‑autonomous) mode
+```bash
+# Allow only FS+Git+Exec+API plugins; stop early when the agent asks for more info
+QJSON_PLUGIN_ALLOW="/fs_list,/fs_read,/fs_write,/git_status,/git_log,/git_diff,/py,/api_get,/api_post" \
+QJSON_ALLOW_EXEC=1 \
+qjson-agents semi --id DevOpsAgent \
+  --manifest personas/DevOpsAgent.ysonx \
+  --goal "Investigate new changes and report status" \
+  --iterations 3 --delay 0.0 --stop-token "need more info" --model auto
+```

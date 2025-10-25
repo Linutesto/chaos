@@ -75,6 +75,7 @@ Documentation
  - docs/ENV_VARS.md — comprehensive environment variables
   - docs/Plugin_API.md — writing your own plugins
   - docs/Data_Formats.md — data formats for fmm.json and run JSON
+  - docs/Plugin_Tests.md — how to run plugin smoke tests and pytest
 
 Quick CI validation
 ```bash
@@ -133,6 +134,19 @@ QJSON_GIT_ROOT="$PWD" qjson-agents exec "/git_log 5" --id Demo
 # Generic API (gated)
 QJSON_ALLOW_NET=1 qjson-agents exec "/api_get https://httpbin.org/get h:Accept=application/json" --id Demo
 ```
+
+Keystone Personas
+- personas/DevOpsAgent.ysonx — devops/CI archetype using Git, FS, Exec, and API plugins
+- personas/ResearchAgent.ysonx — research archetype using API, Holistic‑Scribe (/kg), and Cognitive‑Prism (/prism)
+- personas/SwarmLord.ysonx — orchestrator archetype using Swarm‑Forge (/forge)
+
+DevOps demo
+- `scripts/devops_workflow_demo.sh` initializes a temporary git repo, diffs a new file, reads it, executes it via `/py`, and optionally posts results via `/api_post` when `QJSON_ALLOW_NET=1`.
+
+Custom Agent Mode
+- Semi‑autonomous loop with plugin gating and early stop:
+  - `qjson-agents semi --id <ID> --goal "..." --iterations 3 --stop-token "need more info" --plugins "/fs_list,/py,/git_status"`
+- Also accessible from the menu: Plugins & Tools → Advanced, or Agent Management → Custom Agent Mode.
 
 Persona runtime (drop‑in)
 - Hooks live in:

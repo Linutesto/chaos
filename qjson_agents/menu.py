@@ -45,6 +45,25 @@ def _repo_root() -> Path:
 
 _CACHE: dict = {"scan_files": {}, "agent_ids": {}}
 
+_SQLITE_PLUGIN_INSTANCE = None  # keep a stateful DB connection across menu actions
+
+def _choose_agent_id(prompt: str = "Agent ID (optional)") -> str:
+    ids = _scan_agent_ids()
+    sel = _select_from_list(prompt, ids, allow_empty=True)
+    if isinstance(sel, list):
+        return sel[0] if sel else ""
+    return sel or ""
+
+def _ensure_sqlite_plugin():
+    global _SQLITE_PLUGIN_INSTANCE
+    if _SQLITE_PLUGIN_INSTANCE is None:
+        try:
+            from qjson_agents.plugins.db_plugin import SQLitePlugin
+            _SQLITE_PLUGIN_INSTANCE = SQLitePlugin()
+        except Exception:
+            _SQLITE_PLUGIN_INSTANCE = None
+    return _SQLITE_PLUGIN_INSTANCE
+
 
 def _scan_files(globs: Iterable[str], *, limit: int | None = None, sort_mtime: bool = False, ttl: float = 1.0) -> List[Path]:
     root = _repo_root()
@@ -406,6 +425,8 @@ def _show_agent_menu() -> None:
 7) evolve        8) introspect   9) Back
 10) retrieval settings
 11) toggle context summary
+12) Keystone quick load (DevOps/Research/Swarm)
+13) Custom Agent Mode (semi-autonomous)
             """.strip()
         )
         choice = input("Select: ").strip()
@@ -632,6 +653,10 @@ def _show_agent_menu() -> None:
             _save_prefs(prefs)
             _apply_general_env_from_prefs(prefs)
             print(f"Saved. Context summary {'enabled' if new_val else 'disabled'}.")
+        elif choice == "12":
+            _keystone_quickload()
+        elif choice == "13":
+            _custom_mode_wizard()
         else:
             print("Invalid selection.")
 
@@ -946,6 +971,473 @@ def _show_system_menu() -> None:
             print("Invalid selection.")
 
 
+def _show_plugins_menu() -> None:
+    while True:
+        print(
+            """
+== Plugins & Tools ==
+1) File System       2) Exec (Python)
+3) Git               4) Generic API
+5) SQLite DB         6) Advanced (Forge/Prism/KG/Continuum/Meme)
+7) Back
+            """.strip()
+        )
+        choice = input("Select: ").strip()
+        if choice == "1":
+            _plugins_fs_menu()
+        elif choice == "2":
+            _plugins_exec_menu()
+        elif choice == "3":
+            _plugins_git_menu()
+        elif choice == "4":
+            _plugins_api_menu()
+        elif choice == "5":
+            _plugins_sqlite_menu()
+        elif choice == "6":
+            _plugins_advanced_menu()
+        elif choice == "7":
+            return
+        else:
+            print("Invalid selection.")
+
+
+def _plugins_fs_menu() -> None:
+    prefs = _load_prefs()
+    while True:
+        roots = os.environ.get("QJSON_FS_ROOTS", prefs.get("fs_roots", str(_repo_root())))
+        print(
+            f"""
+== File System == (roots: {roots})
+1) Set FS roots (os.pathsep-separated)
+2) List files (/fs_list)
+3) Read file (/fs_read)
+4) Write file (/fs_write) [gated]
+5) Back
+            """.strip()
+        )
+        sel = input("Select: ").strip()
+        if sel == "1":
+            val = _ask("FS roots", required=False, default=roots)
+            prefs["fs_roots"] = val
+            _save_prefs(prefs)
+            os.environ["QJSON_FS_ROOTS"] = val
+            print("Saved.")
+        elif sel == "2":
+            base = _ask("Path", required=False, default=str(_repo_root()))
+            glob = _ask("Glob (optional)", required=False)
+            mx = _ask("Max N", required=False, default="50")
+            agent = _choose_agent_id("Agent ID for context (optional)")
+            cmd = f"/fs_list {base}"
+            if glob:
+                cmd += f" glob={glob}"
+            cmd += f" max={mx}"
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "3":
+            path = _ask("File path")
+            mb = _ask("Max bytes", required=False, default="65536")
+            agent = _choose_agent_id("Agent ID for context (optional)")
+            cmd = f"/fs_read {path} max_bytes={mb}"
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "4":
+            os.environ["QJSON_FS_WRITE"] = "1"
+            path = _ask("File path")
+            src = _ask("Text or @file", required=False, default="@")
+            append = _ask("Append? (y/N)", required=False, default="N")
+            agent = _choose_agent_id("Agent ID for context (optional)")
+            cmd = f"/fs_write {path} {src} append={'1' if append.lower().startswith('y') else '0'}"
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "5":
+            return
+        else:
+            print("Invalid selection.")
+
+
+def _plugins_exec_menu() -> None:
+    while True:
+        print(
+            """
+== Exec (Python) ==
+1) Toggle allow exec (QJSON_ALLOW_EXEC)
+2) Run inline code
+3) Run @file.py
+4) Back
+            """.strip()
+        )
+        sel = input("Select: ").strip()
+        if sel == "1":
+            cur = os.environ.get("QJSON_ALLOW_EXEC", "0") == "1"
+            v = _ask("Enable exec? (y/N)", required=False, default=("Y" if cur else "N"))
+            os.environ["QJSON_ALLOW_EXEC"] = "1" if v.lower().startswith("y") else "0"
+            print("Saved.")
+        elif sel == "2":
+            code = _ask("Python code (e.g., print(2+2))")
+            agent = _choose_agent_id("Agent ID (optional)")
+            cmd = f"/py {code}"
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "3":
+            path = _ask("Path to @file.py")
+            agent = _choose_agent_id("Agent ID (optional)")
+            cmd = f"/py @{path}"
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "4":
+            return
+        else:
+            print("Invalid selection.")
+
+
+def _plugins_git_menu() -> None:
+    prefs = _load_prefs()
+    while True:
+        root = os.environ.get("QJSON_GIT_ROOT", prefs.get("git_root", str(_repo_root())))
+        print(
+            f"""
+== Git (read-only) == (root: {root})
+1) Set git root
+2) Status (/git_status)
+3) Log (/git_log)
+4) Diff (/git_diff)
+5) Back
+            """.strip()
+        )
+        sel = input("Select: ").strip()
+        if sel == "1":
+            val = _ask("Git root", required=False, default=root)
+            prefs["git_root"] = val
+            _save_prefs(prefs)
+            os.environ["QJSON_GIT_ROOT"] = val
+            print("Saved.")
+        elif sel == "2":
+            short = _ask("Short? (Y/n)", required=False, default="Y").lower().startswith("y")
+            agent = _choose_agent_id("Agent ID (optional)")
+            cmd = f"/git_status {'short=1' if short else ''}".strip()
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "3":
+            n = _ask("Show last N", required=False, default="10")
+            agent = _choose_agent_id("Agent ID (optional)")
+            cmd = f"/git_log {n}"
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "4":
+            path = _ask("Path to diff (relative to root)", required=False, default="")
+            agent = _choose_agent_id("Agent ID (optional)")
+            cmd = f"/git_diff {path}".strip()
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "5":
+            return
+        else:
+            print("Invalid selection.")
+
+
+def _plugins_api_menu() -> None:
+    while True:
+        net = os.environ.get("QJSON_ALLOW_NET", "0") == "1"
+        print(
+            f"""
+== Generic API == (allow_net={net})
+1) Toggle network (QJSON_ALLOW_NET)
+2) GET (/api_get)
+3) POST (/api_post)
+4) Back
+            """.strip()
+        )
+        sel = input("Select: ").strip()
+        if sel == "1":
+            v = _ask("Enable network? (y/N)", required=False, default=("Y" if net else "N"))
+            os.environ["QJSON_ALLOW_NET"] = "1" if v.lower().startswith("y") else "0"
+            print("Saved.")
+        elif sel == "2":
+            url = _ask("URL")
+            hdr = _ask("Headers h:K=V (space-separated, optional)", required=False)
+            timeout = _ask("Timeout seconds", required=False, default="6")
+            maxc = _ask("Max preview chars", required=False, default="4000")
+            agent = _choose_agent_id("Agent ID (optional)")
+            cmd = f"/api_get {url} {hdr or ''} timeout={timeout} max={maxc}".strip()
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "3":
+            url = _ask("URL")
+            body = _ask("Body (single-quoted JSON recommended)")
+            ct = _ask("Content-Type", required=False, default="application/json")
+            timeout = _ask("Timeout seconds", required=False, default="6")
+            maxc = _ask("Max preview chars", required=False, default="4000")
+            agent = _choose_agent_id("Agent ID (optional)")
+            cmd = f"/api_post {url} body={body} ct={ct} timeout={timeout} max={maxc}"
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "4":
+            return
+        else:
+            print("Invalid selection.")
+
+
+def _plugins_sqlite_menu() -> None:
+    pl = _ensure_sqlite_plugin()
+    if pl is None:
+        print("[sql] SQLite plugin unavailable.")
+        return
+    while True:
+        print(
+            """
+== SQLite DB == (stateful)
+1) Open DB (path) [ro=1]
+2) Tables
+3) Query (json=1 max=N)
+4) Close
+5) Back
+            """.strip()
+        )
+        sel = input("Select: ").strip()
+        if sel == "1":
+            path = _ask("DB path")
+            ro = _ask("Read-only? (Y/n)", required=False, default="Y").lower().startswith("y")
+            print(pl.sql_open(path, f"ro={'1' if ro else '0'}"))
+        elif sel == "2":
+            print(pl.sql_tables())
+        elif sel == "3":
+            sql = _ask("SQL (e.g., select * from t)")
+            mx = _ask("max N", required=False, default="200")
+            j = _ask("json output? (Y/n)", required=False, default="Y").lower().startswith("y")
+            print(pl.sql_query(*([*sql.split(), f"max={mx}", f"json={'1' if j else '0'}"])) )
+        elif sel == "4":
+            print(pl.sql_close())
+        elif sel == "5":
+            return
+        else:
+            print("Invalid selection.")
+
+
+def _plugins_advanced_menu() -> None:
+    while True:
+        print(
+            """
+== Advanced Plugins ==
+1) Forge (/forge create/info/plugins/goal)
+2) Delegate/Report (Forge)
+3) Prism (/prism hats)
+4) Holistic‑Scribe (/kg)
+5) Continuum (/continuum export/import)
+6) Meme‑Weaver (/meme)
+7) Back
+            """.strip()
+        )
+        sel = input("Select: ").strip()
+        if sel == "1":
+            sub = _ask("create/info/plugins/goal", required=False, default="create")
+            aid = _ask("Agent ID")
+            if sub == "create":
+                role = _ask("role", required=False, default="specialist")
+                model = _ask("model", required=False, default="gemma3:4b")
+                goal = _ask("goal", required=False)
+                plugins = _ask("plugins (comma-separated)", required=False)
+                cmd = f"/forge create {aid} role={role} model={model} {'goal='+goal if goal else ''} {'plugins='+plugins if plugins else ''}"
+            elif sub == "info":
+                cmd = f"/forge info {aid}"
+            elif sub == "plugins":
+                mode = _ask("set/add/del")
+                vals = _ask("values (comma-separated)")
+                cmd = f"/forge plugins {aid} {mode}={vals}"
+            elif sub == "goal":
+                text = _ask("goal text")
+                cmd = f"/forge goal {aid} {text}"
+            else:
+                print("Unknown."); continue
+            agent = _choose_agent_id("Parent agent ID (optional)")
+            argv = ["exec", cmd]
+            if agent:
+                argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "2":
+            aid = _ask("Target child agent ID")
+            task = _ask("Task text")
+            cmd = f"/forge delegate {aid} {task}"
+            agent = _choose_agent_id("Parent agent ID (optional)")
+            argv = ["exec", cmd]
+            if agent: argv += ["--id", agent]
+            _execute_command(argv)
+            # report
+            cmd = f"/forge report {aid}"
+            argv = ["exec", cmd]
+            if agent: argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "3":
+            q = _ask("Question")
+            hats = _ask("hats (comma-separated or 'auto')", required=False, default="auto")
+            cmd = f"/prism {q} hats={hats}"
+            agent = _choose_agent_id("Agent ID (optional)")
+            argv = ["exec", cmd]
+            if agent: argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "4":
+            mode = _ask("add_node/add_edge/stats/export")
+            agent = _choose_agent_id("Agent ID (optional)")
+            if mode == "add_node":
+                nid = _ask("id"); label = _ask("label", required=False, default=nid)
+                tags = _ask("tags (comma-separated)", required=False)
+                data = _ask("data JSON (optional)", required=False)
+                cmd = f"/kg add_node id={nid} label={label} {'tags='+tags if tags else ''} {'data='+data if data else ''}".strip()
+            elif mode == "add_edge":
+                src = _ask("src"); dst = _ask("dst"); et = _ask("type", required=False, default="rel")
+                w = _ask("weight", required=False, default="1.0"); data = _ask("data JSON (optional)", required=False)
+                cmd = f"/kg add_edge src={src} dst={dst} type={et} weight={w} {'data='+data if data else ''}".strip()
+            elif mode == "stats":
+                cmd = "/kg stats"
+            elif mode == "export":
+                path = _ask("Mermaid output path")
+                cmd = f"/kg export mermaid {path}"
+            else:
+                print("Unknown."); continue
+            argv = ["exec", cmd]
+            if agent: argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "5":
+            sub = _ask("export/import")
+            agent = _choose_agent_id("Agent ID (for export) (optional)")
+            if sub == "export":
+                outd = _ask("Destination dir", required=False, default=str(_repo_root()/"tmp"))
+                cmd = f"/continuum export {agent or 'Agent'} path={outd}"
+            else:
+                arc = _ask("Path to tar.gz")
+                new_id = _ask("New agent id")
+                cmd = f"/continuum import {arc} new_id={new_id}"
+            argv = ["exec", cmd]
+            if agent: argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "6":
+            sub = _ask("analyze/generate")
+            agent = _choose_agent_id("Agent ID (optional)")
+            if sub == "analyze":
+                topic = _ask("topic")
+                cmd = f"/meme analyze {topic}"
+            else:
+                topic = _ask("topic"); style = _ask("style", required=False, default="humor"); fmt = _ask("format", required=False, default="tweet")
+                cmd = f"/meme generate text {topic} style={style} format={fmt}"
+            argv = ["exec", cmd]
+            if agent: argv += ["--id", agent]
+            _execute_command(argv)
+        elif sel == "7":
+            return
+        else:
+            print("Invalid selection.")
+
+
+def _keystone_quickload() -> None:
+    files = [
+        _repo_root() / "personas" / "DevOpsAgent.ysonx",
+        _repo_root() / "personas" / "ResearchAgent.ysonx",
+        _repo_root() / "personas" / "SwarmLord.ysonx",
+    ]
+    avail = [str(p) for p in files if p.exists()]
+    if not avail:
+        print("No Keystone personas found.")
+        return
+    sel = _select_from_list("Select Keystone persona", avail, allow_empty=False, default_idx=0)
+    manifest = sel if isinstance(sel, str) else (sel[0] if sel else avail[0])
+    # Initialize
+    argv = ["init", "--manifest", manifest]
+    _execute_command(argv)
+    # Ask to enter chat and/or open Plugins menu
+    do_chat = _ask("Start chat now? (Y/n)", required=False, default="Y")
+    if not do_chat.strip().lower().startswith("n"):
+        agent_id = Path(manifest).stem
+        _execute_command(["chat", "--id", agent_id, "--manifest", manifest])
+    else:
+        j = _ask("Open Plugins & Tools menu? (Y/n)", required=False, default="Y")
+        if not j.strip().lower().startswith("n"):
+            _show_plugins_menu()
+
+
+def _custom_mode_wizard() -> None:
+    # Agent selection
+    agents = _scan_agent_ids()
+    sel_id = _select_from_list("Select base agent (or Custom)", agents, allow_empty=True, default_idx=(0 if agents else None))
+    agent_id = sel_id if isinstance(sel_id, str) and sel_id else _ask("Agent ID", required=False, default="Lila-v∞")
+    # Optional manifest to (re)initialize
+    files = _scan_files(["personas/*.ysonx", "personas/*.yson", "manifests/*.json"]) 
+    selm = _select_from_list("Manifest path (optional)", [str(p) for p in files], allow_empty=True, default_idx=0)
+    manifest = selm if isinstance(selm, str) else (selm[0] if selm else "")
+    if manifest:
+        _execute_command(["init", "--manifest", manifest])
+    # Plugin selection
+    print("Select plugin categories (y/N):")
+    use_fs = _ask("File System? (y/N)", required=False, default="Y")
+    use_exec = _ask("Exec (Python)? (y/N)", required=False, default="N")
+    use_git = _ask("Git? (y/N)", required=False, default="Y")
+    use_api = _ask("Generic API? (y/N)", required=False, default="N")
+    use_db = _ask("SQLite DB? (y/N)", required=False, default="N")
+    use_adv = _ask("Advanced (Forge/Prism/KG/Continuum/Meme)? (y/N)", required=False, default="Y")
+    allow: list[str] = []
+    if use_fs.lower().startswith("y"):
+        allow += ["/fs_list","/fs_read","/fs_write"]
+        roots = _ask("FS roots (os.pathsep-separated)", required=False, default=os.environ.get("QJSON_FS_ROOTS",""))
+        if roots:
+            os.environ["QJSON_FS_ROOTS"] = roots
+        if _ask("Allow FS writes? (y/N)", required=False, default="N").lower().startswith("y"):
+            os.environ["QJSON_FS_WRITE"] = "1"
+    if use_exec.lower().startswith("y"):
+        allow += ["/py"]
+        os.environ["QJSON_ALLOW_EXEC"] = "1"
+    if use_git.lower().startswith("y"):
+        allow += ["/git_status","/git_log","/git_diff"]
+        root = _ask("Git root (optional)", required=False, default=os.environ.get("QJSON_GIT_ROOT",""))
+        if root:
+            os.environ["QJSON_GIT_ROOT"] = root
+    if use_api.lower().startswith("y"):
+        allow += ["/api_get","/api_post"]
+        if _ask("Enable network? (y/N)", required=False, default="N").lower().startswith("y"):
+            os.environ["QJSON_ALLOW_NET"] = "1"
+    if use_db.lower().startswith("y"):
+        allow += ["/sql_open","/sql_query","/sql_tables","/sql_close"]
+    if use_adv.lower().startswith("y"):
+        allow += ["/forge","/prism","/kg","/continuum","/meme"]
+    os.environ["QJSON_PLUGIN_ALLOW"] = ",".join(allow)
+    # Goal & loop settings
+    goal = _ask("Goal", required=False, default="execute the task using selected tools")
+    iters = _ask("Iterations", required=False, default="3")
+    delay = _ask("Delay seconds", required=False, default="0.0")
+    stop_token = _ask("Stop token (default 'need more info')", required=False, default="need more info")
+    model = _select_from_list("Select model (optional)", _get_ollama_models(), allow_empty=True, default_idx=0)
+    # Launch semi mode
+    argv = [
+        "semi", "--id", agent_id,
+        "--goal", goal,
+        "--iterations", iters,
+        "--delay", delay,
+        "--stop-token", stop_token,
+    ]
+    if manifest:
+        argv += ["--manifest", manifest]
+    if model:
+        argv += ["--model", model]
+    _execute_command(argv)
+
+
 def run_menu() -> None:
     # Apply saved retrieval prefs to environment for child commands
     try:
@@ -963,8 +1455,9 @@ def run_menu() -> None:
 2) Swarm & Cluster Management
 3) YSON & Manifest Tools
 4) System & Utilities
-5) Web & Crawl Settings
-6) Exit
+5) Plugins & Tools
+6) Web & Crawl Settings
+7) Exit
             """.strip()
         )
         sel = input("Select: ").strip()
@@ -977,8 +1470,10 @@ def run_menu() -> None:
         elif sel == "4":
             _show_system_menu()
         elif sel == "5":
-            _show_web_menu()
+            _show_plugins_menu()
         elif sel == "6":
+            _show_web_menu()
+        elif sel == "7":
             print("Goodbye.")
             return
         else:
