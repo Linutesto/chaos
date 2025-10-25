@@ -50,3 +50,26 @@ Best practices
 - Prefer HTML→outline→index when ingesting pages to avoid bloated prompts.
 - Use the unified cache keys so `/open N` works across plugins.
 
+Built‑in plugins (usage + safety)
+- File system — `qjson_agents/plugins/filesystem_plugin.py`
+  - `/fs_list [PATH] [glob=PAT] [max=N]`
+  - `/fs_read <PATH> [max_bytes=N]`
+  - `/fs_write <PATH> <TEXT|@file> [append=1]`
+  - Safety: reads/writes restricted to `QJSON_FS_ROOTS` (os.pathsep‑separated; defaults to CWD). Writes require `QJSON_FS_WRITE=1`. Write size capped (~100k chars).
+
+- Python exec — `qjson_agents/plugins/exec_plugin.py`
+  - `/py <CODE...>` or `/py @file.py`
+  - Safety: requires `QJSON_ALLOW_EXEC=1`. Timeout via `QJSON_EXEC_TIMEOUT` (default 5s). Output capped (16k).
+
+- SQLite DB — `qjson_agents/plugins/db_plugin.py`
+  - `/sql_open <PATH> [ro=1]`, `/sql_tables`, `/sql_query <SQL> [max=N] [json=1]`, `/sql_close`
+  - Safety: read‑only by default (`ro=1`). Row cap default 200 (`QJSON_SQL_MAX_ROWS`). Connection is per‑process (open/query within the same chat/exec process).
+
+- Git (read‑only) — `qjson_agents/plugins/git_plugin.py`
+  - `/git_status [short=1]`, `/git_log [N]`, `/git_diff [PATH]`
+  - Repo root from `QJSON_GIT_ROOT` (defaults to CWD). Write ops intentionally omitted unless gated in future.
+
+- Generic REST API — `qjson_agents/plugins/api_plugin.py`
+  - `/api_get <URL> [h:K=V ...] [timeout=N] [max=N]`
+  - `/api_post <URL> body='{}' [ct=application/json] [h:K=V ...] [timeout=N] [max=N]`
+  - Safety: requires `QJSON_ALLOW_NET=1`. Timeout defaults 6s. Response preview capped (~4k chars).

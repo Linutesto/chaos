@@ -107,6 +107,33 @@ Roadmap
 - See docs/ROADMAP.md for near-, mid-term, and exploratory plans.
 - Brand assets: `assets/logo-mark.svg` (favicon/logo), `assets/banner.svg` (hero).
 
+Built-in Plugins (high level)
+- File System: `/fs_list`, `/fs_read`, `/fs_write` (writes gated by `QJSON_FS_WRITE=1`; restricted to `QJSON_FS_ROOTS`).
+- Python Exec: `/py <CODE...>|@file.py` (gated by `QJSON_ALLOW_EXEC=1`; timeout via `QJSON_EXEC_TIMEOUT`).
+- SQLite DB: `/sql_open <PATH> [ro=1]`, `/sql_query <SQL> [max=N] [json=1]`, `/sql_tables`, `/sql_close` (read‑only by default; per‑process connection).
+- Git (read‑only): `/git_status [short=1]`, `/git_log [N]`, `/git_diff [PATH]` (repo root via `QJSON_GIT_ROOT`).
+- Generic API: `/api_get` and `/api_post` (gated by `QJSON_ALLOW_NET=1`; timeouts and size caps).
+
+Examples
+```bash
+# File System (list/read), restricted to current dir
+QJSON_FS_ROOTS="$PWD" qjson-agents exec "/fs_list . glob=*.md" --id Demo
+QJSON_FS_ROOTS="$PWD" qjson-agents exec "/fs_read README.md max_bytes=4096" --id Demo
+
+# Python exec (gated)
+QJSON_ALLOW_EXEC=1 qjson-agents exec "/py print(2+2)" --id Demo
+
+# SQLite (single process recommended: chat)
+qjson-agents exec "/sql_open ./data.db ro=1" --id Demo
+qjson-agents exec "/sql_query select count(*) from users json=1 max=10" --id Demo
+
+# Git (read-only)
+QJSON_GIT_ROOT="$PWD" qjson-agents exec "/git_log 5" --id Demo
+
+# Generic API (gated)
+QJSON_ALLOW_NET=1 qjson-agents exec "/api_get https://httpbin.org/get h:Accept=application/json" --id Demo
+```
+
 Persona runtime (drop‑in)
 - Hooks live in:
   - qjson_agents/logic/common_utils.py
