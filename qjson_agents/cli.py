@@ -911,45 +911,14 @@ def cmd_chat(args: argparse.Namespace, default_api: Any = None) -> int:
             _engine_find(arg, default_mode=eff_mode, agent_id=agent.agent_id, default_api=default_api)
             continue
         if command == "/open":
-            # Support helpers: '/open show' to list cache, '/open refresh' to reload persisted cache
-            arg = user.replace("/open", "", 1).strip()
-            toks = [t for t in arg.split() if t]
-            if toks and toks[0].lower() == "refresh":
-                try:
-                    _load_persistent_env()
-                    _print("[open] cache refreshed from state/env.json")
-                except Exception as e:
-                    _print(f"[open] refresh failed: {e}")
-                continue
-            if toks and toks[0].lower() == "show":
-                cache = os.environ.get("QJSON_WEBRESULTS_CACHE") or os.environ.get("QJSON_WEBSEARCH_RESULTS_ONCE")
-                if not cache:
-                    try:
-                        _load_persistent_env()
-                        cache = os.environ.get("QJSON_WEBRESULTS_CACHE") or os.environ.get("QJSON_WEBSEARCH_RESULTS_ONCE")
-                    except Exception:
-                        cache = None
-                if not cache:
-                    _print("[open] No cached results. Run /find or /crawl first.")
-                    continue
-                try:
-                    arr = json.loads(cache)
-                except Exception:
-                    _print("[open] Cached results are invalid. Run /find again.")
-                    continue
-                _print(f"[open] {len(arr)} result(s) in cache:")
-                for i, r in enumerate(arr, 1):
-                    ttl = (r.get('title') or r.get('name') or r.get('url') or '').strip()
-                    url = (r.get('url') or '').strip()
-                    _print(f"{i:02d}) {ttl}\n    {url}")
-                continue
-            # Otherwise, open by index with optional ingest and mode
             # Reload persisted env only if no current results are cached in-session
             if not os.environ.get("QJSON_WEBRESULTS_CACHE") and not os.environ.get("QJSON_WEBSEARCH_RESULTS_ONCE"):
                 try:
                     _load_persistent_env()
                 except Exception:
                     pass
+            arg = user.replace("/open", "", 1).strip()
+            toks = [t for t in arg.split() if t]
             ingest_flag = False
             mode_once: str | None = None
             idx_tokens: List[str] = []
@@ -964,15 +933,15 @@ def cmd_chat(args: argparse.Namespace, default_api: Any = None) -> int:
                         continue
                     idx_tokens.append(t)
             else:
-                _print("Usage: /open N [ingest] | /open ingest N [M ...] | /open show | /open refresh")
+                _print("Usage: /open N [ingest] | /open ingest N [M ...]")
                 continue
             cache = os.environ.get("QJSON_WEBRESULTS_CACHE") or os.environ.get("QJSON_WEBSEARCH_RESULTS_ONCE")
             if not cache:
-                _print("[open] No cached results. Run /find or /crawl first (tip: '/open show' to inspect cache).")
+                _print("[open] No cached results. Run /find or /crawl first.")
                 continue
             indices = _parse_indices(idx_tokens)
             if not indices:
-                _print("Usage: /open N [ingest] | /open ingest N [M ...] | /open show | /open refresh")
+                _print("Usage: /open N [ingest] | /open ingest N [M ...]")
                 continue
             # Inject the last requested index; ingest optionally all
             last = indices[-1]
