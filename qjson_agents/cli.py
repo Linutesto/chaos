@@ -37,6 +37,19 @@ def _print(s: str) -> None:
     sys.stdout.flush()
 
 
+def _plugin_summary_line() -> str:
+    allow = os.environ.get("QJSON_PLUGIN_ALLOW", "")
+    # Show at most ~6 items to keep concise
+    allowed = [a for a in (allow.split(",") if allow else []) if a]
+    head = ",".join(allowed[:6]) + ("…" if len(allowed) > 6 else "") if allowed else "(all loaded)"
+    gates = []
+    gates.append(f"exec={'on' if os.environ.get('QJSON_ALLOW_EXEC')=='1' else 'off'}")
+    gates.append(f"net={'on' if os.environ.get('QJSON_ALLOW_NET')=='1' else 'off'}")
+    gates.append(f"fs_write={'on' if os.environ.get('QJSON_FS_WRITE')=='1' else 'off'}")
+    roots = (os.environ.get("QJSON_FS_ROOTS") or os.getcwd())
+    return f"[plugins] allowed={head} | {' '.join(gates)} | fs_roots={roots}"
+
+
 def _parse_search_roots() -> List[str]:
     # Roots can be set via env QJSON_LOCAL_SEARCH_ROOTS as os.pathsep-separated list
     raw = os.environ.get("QJSON_LOCAL_SEARCH_ROOTS", "").strip()
@@ -725,6 +738,10 @@ def cmd_chat(args: argparse.Namespace, default_api: Any = None) -> int:
         return 0
 
     _print(f"Chatting with {agent.agent_id}. Type /help for commands; /exit to quit; /fork <NEW_ID> to fork.")
+    try:
+        _print(_plugin_summary_line())
+    except Exception:
+        pass
     # Persist agent id to env for plugins (crawl/indexing)
     try:
         os.environ["QJSON_AGENT_ID"] = agent.agent_id
@@ -869,6 +886,13 @@ def cmd_chat(args: argparse.Namespace, default_api: Any = None) -> int:
                     pass
                 eff_mode = os.environ.get("QJSON_ENGINE_DEFAULT", engine_mode)
                 _print(f"[engine] mode={eff_mode}")
+            continue
+        if command == "/plugins":
+            # Print current plugin allowlist and gates
+            try:
+                _print(_plugin_summary_line())
+            except Exception:
+                _print("[plugins] summary unavailable")
             continue
         if command == "/find":
             # Reload persisted settings so /find honors system config (mode, top-k, etc.)
@@ -1908,12 +1932,32 @@ def cmd_loop(args: argparse.Namespace) -> int:
     else:
         mpath = agent_dir(agent_id) / "manifest.json"
         if not mpath.exists():
-            _print("No manifest found. Provide --manifest to initialize.")
-            return 2
-        manifest = json.loads(mpath.read_text(encoding="utf-8"))
-        if args.model:
-            manifest.setdefault("runtime", {})["model"] = args.model
-        agent = Agent(manifest)
+            # Minimal fallback manifest so semi can run without prior init
+            manifest = {
+                "agent_id": agent_id,
+                "origin": "Local",
+                "creator": "qjson-agents",
+                "roles": ["semi"],
+                "features": {
+                    "recursive_memory": True,
+                    "fractal_state": True,
+                    "autonomous_reflection": False,
+                    "emergent_behavior": "deterministic",
+                    "chaos_alignment": "low",
+                    "symbolic_interface": "text",
+                },
+                "core_directives": [
+                    "Act safely",
+                    "Be concise and cite tool results when relevant",
+                ],
+                "runtime": {"model": args.model or "mock-llm"},
+            }
+            agent = Agent(manifest)
+        else:
+            manifest = json.loads(mpath.read_text(encoding="utf-8"))
+            if args.model:
+                manifest.setdefault("runtime", {})["model"] = args.model
+            agent = Agent(manifest)
 
     # Resolve model automatically from /api/tags if needed
     chosen_model = None
@@ -1938,6 +1982,13 @@ def cmd_loop(args: argparse.Namespace) -> int:
     append_jsonl(agent_dir(agent.agent_id) / "events.jsonl", {"ts": _now_ts(), "type": "loop_start", "meta": {"goal": goal, "iterations": iters}})
 
     import time
+    llm_client = None
+    if (args.model or "").strip().lower() == "mock-llm":
+        class _Mock:
+            def chat(self, *, model: str, messages: list[dict], options: dict | None = None, stream: bool = False) -> dict:
+                prev_user = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
+                return {"message": {"role": "assistant", "content": f"(mock) {prev_user[:120]}"}}
+        llm_client = _Mock()
     for i in range(1, iters + 1):
         user = (
             f"Autonomous loop tick {i}/{iters}. Goal: {goal}. "
@@ -1946,7 +1997,7 @@ def cmd_loop(args: argparse.Namespace) -> int:
         _print(f"tick {i} > {user}")
         try:
             model_override = chosen_model or args.model
-            reply = agent.chat_turn(user, model_override=model_override)
+            reply = agent.chat_turn(user, client=llm_client, model_override=model_override)
         except Exception as e:
             _print(f"[error] {e}")
             break
@@ -1978,7 +2029,7 @@ def cmd_models(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_semi(args: argparse.Namespace) -> int:
+def cmd_semi(args: argparse.Namespace, default_api: Any = None) -> int:
     """Run a semi-autonomous loop with a plugin whitelist and early-stop heuristics."""
     agent_id = args.id
     manifest_path = Path(args.manifest) if args.manifest else None
@@ -1994,12 +2045,32 @@ def cmd_semi(args: argparse.Namespace) -> int:
     else:
         mpath = agent_dir(agent_id) / "manifest.json"
         if not mpath.exists():
-            _print("No manifest found. Provide --manifest to initialize.")
-            return 2
-        manifest = json.loads(mpath.read_text(encoding="utf-8"))
-        if args.model:
-            manifest.setdefault("runtime", {})["model"] = args.model
-        agent = Agent(manifest)
+            # Minimal fallback manifest so semi can run without prior init
+            manifest = {
+                "agent_id": agent_id,
+                "origin": "Local",
+                "creator": "qjson-agents",
+                "roles": ["semi"],
+                "features": {
+                    "recursive_memory": True,
+                    "fractal_state": True,
+                    "autonomous_reflection": False,
+                    "emergent_behavior": "deterministic",
+                    "chaos_alignment": "low",
+                    "symbolic_interface": "text",
+                },
+                "core_directives": [
+                    "Act safely",
+                    "Be concise and cite tool results when relevant",
+                ],
+                "runtime": {"model": args.model or "mock-llm"},
+            }
+            agent = Agent(manifest)
+        else:
+            manifest = json.loads(mpath.read_text(encoding="utf-8"))
+            if args.model:
+                manifest.setdefault("runtime", {})["model"] = args.model
+            agent = Agent(manifest)
 
     # Apply plugin gating envs
     if args.plugins:
@@ -2014,6 +2085,19 @@ def cmd_semi(args: argparse.Namespace) -> int:
         os.environ["QJSON_FS_WRITE"] = "1"
     if args.git_root:
         os.environ["QJSON_GIT_ROOT"] = args.git_root
+    # Optional max tokens env for semi replies
+    if getattr(args, "max_tokens", None):
+        try:
+            os.environ["QJSON_MAX_TOKENS"] = str(max(16, int(args.max_tokens)))
+        except Exception:
+            pass
+
+    # Optional max tokens
+    if getattr(args, "max_tokens", None):
+        try:
+            os.environ["QJSON_MAX_TOKENS"] = str(max(16, int(args.max_tokens)))
+        except Exception:
+            pass
 
     # Resolve model automatically if needed
     chosen_model = None
@@ -2026,6 +2110,14 @@ def cmd_semi(args: argparse.Namespace) -> int:
                 _print(f"[models] selected: {chosen_model}")
         except Exception:
             pass
+    # Optional mock client for offline testing
+    llm_client = None
+    if (args.model or "").strip().lower() == "mock-llm":
+        class _Mock:
+            def chat(self, *, model: str, messages: list[dict], options: dict | None = None, stream: bool = False) -> dict:
+                prev_user = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
+                return {"message": {"role": "assistant", "content": f"(mock) {prev_user[:120]}"}}
+        llm_client = _Mock()
 
     goal = args.goal or "Execute the task safely using available tools."
     iters = max(1, int(args.iterations))
@@ -2036,7 +2128,91 @@ def cmd_semi(args: argparse.Namespace) -> int:
     from .memory import append_jsonl, _now_ts
     append_jsonl(agent_dir(agent.agent_id) / "events.jsonl", {"ts": _now_ts(), "type": "semi_start", "meta": {"goal": goal, "iterations": iters}})
 
-    import time
+    import time, re, shlex
+    # Load plugins and commands (respect allow/deny filters)
+    def _google_web_search_wrapper(query: str) -> dict:
+        if default_api is None or not hasattr(default_api, "google_web_search"):
+            raise RuntimeError("default_api.google_web_search not available")
+        return default_api.google_web_search(query=query)
+    tools = {"google_web_search": _google_web_search_wrapper}
+    from .plugin_manager import load_plugins
+    plugins = load_plugins(tools=tools)
+    plugin_commands: Dict[str, Any] = {}
+    for pl in plugins:
+        try:
+            plugin_commands.update(pl.get_commands())
+        except Exception:
+            pass
+    allowed_cmds = sorted(list(plugin_commands.keys()))
+    # Normalize FS roots to absolute resolved paths to avoid case/path mismatch
+    fs_roots = (os.environ.get("QJSON_FS_ROOTS") or os.getcwd())
+    try:
+        roots_norm = []
+        for r in fs_roots.split(os.pathsep):
+            if not r:
+                continue
+            try:
+                roots_norm.append(str(Path(os.path.expanduser(r)).resolve()))
+            except Exception:
+                roots_norm.append(r)
+        if roots_norm:
+            os.environ["QJSON_FS_ROOTS"] = os.pathsep.join(roots_norm)
+            fs_roots = os.environ["QJSON_FS_ROOTS"]
+    except Exception:
+        pass
+    hint_tools = "\n".join([f"- {c}" for c in allowed_cmds[:16]]) + ("\n- …" if len(allowed_cmds) > 16 else "")
+    extra_hint_base = (
+        "TOOL PROTOCOL (strict):\n"
+        "1) If a tool is appropriate, begin your reply with ONE slash-command line only (e.g., '/fs_list PATH').\n"
+        "2) Do not fabricate tool outputs — wait for the system to run the tool and provide results.\n"
+        "3) After the tool result appears, provide a concise next step.\n"
+        "4) If you need more information, say exactly: 'need more info'.\n"
+        "5) When the task is fully done, say exactly: 'task complete'.\n"
+        f"FS roots: {fs_roots}\n"
+        "Available tools (subset):\n" + hint_tools + "\n"
+        "Common patterns: '/fs_list .', '/fs_read README.md', '/git_status short=1'."
+    )
+    tool_context_msgs: List[Dict[str, str]] = []
+    actions_log: List[str] = []
+
+    # Pre-run: execute all slash-commands embedded in the goal (in order)
+    if goal:
+        try:
+            import re, shlex as _shlex
+            # Find each verb position and slice until the next verb or newline
+            matches = list(re.finditer(r"/[a-z_]+", goal))
+            spans: list[tuple[int, int]] = []
+            for i, m in enumerate(matches):
+                start = m.start()
+                end = matches[i + 1].start() if i + 1 < len(matches) else goal.find("\n", start)
+                if end == -1:
+                    end = len(goal)
+                spans.append((start, end))
+            for start, end in spans:
+                raw_cmd = goal[start:end].strip()
+                parts = raw_cmd.split(maxsplit=1)
+                verb = parts[0]
+                args_str = parts[1] if len(parts) > 1 else ""
+                if verb in plugin_commands:
+                    os.environ["QJSON_AGENT_ID"] = agent.agent_id
+                    try:
+                        arg_parts = _shlex.split(args_str)
+                    except Exception:
+                        arg_parts = args_str.split()
+                    try:
+                        out = plugin_commands[verb](*arg_parts)
+                    except Exception as e:
+                        out = f"[error] {e}"
+                    _print(f"[tool:pre] {verb} {args_str}\n{out}")
+                    tool_context_msgs.append({"role": "system", "content": f"[tool] {verb} {args_str}\n{out}"})
+                    actions_log.append(f"pre:{verb}")
+                    try:
+                        agent._log_message("system", f"[tool] {verb} {args_str}\n{out}", {"source": "semi_tool_pre"})
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     for i in range(1, iters + 1):
         user = (
             f"Semi-autonomous tick {i}/{iters}. Goal: {goal}. "
@@ -2045,15 +2221,142 @@ def cmd_semi(args: argparse.Namespace) -> int:
         _print(f"tick {i} > {user}")
         try:
             model_override = chosen_model or args.model
-            reply = agent.chat_turn(user, model_override=model_override)
+            # Build a small recent-actions header to keep the model aware between ticks
+            if actions_log:
+                tail = ", ".join(actions_log[-6:])
+                state_header = f"Recent actions: {tail}"
+            else:
+                state_header = ""
+            extra_hint = (extra_hint_base + ("\n" + state_header if state_header else ""))
+            reply = agent.chat_turn(user, client=llm_client, model_override=model_override, extra_system=extra_hint, extra_context=tool_context_msgs[-4:])
         except Exception as e:
             _print(f"[error] {e}")
             break
         _print(f"{agent.agent_id} > {reply}\n")
+        # Execute one proposed tool command if present
+        ran_tool = False
+        try:
+            m = re.search(r"^\s*(/[a-z_]+[^\n]*)", reply or "", flags=re.MULTILINE)
+            if m:
+                raw_cmd = m.group(1).strip()
+                parts = raw_cmd.split(maxsplit=1)
+                verb = parts[0]
+                args_str = parts[1] if len(parts) > 1 else ""
+                if verb in plugin_commands:
+                    os.environ["QJSON_AGENT_ID"] = agent.agent_id
+                    try:
+                        arg_parts = shlex.split(args_str)
+                    except Exception:
+                        arg_parts = args_str.split()
+                    out = plugin_commands[verb](*arg_parts)
+                    _print(f"[tool] {verb} ->\n{out}")
+                    tool_context_msgs.append({"role": "system", "content": f"[tool] {verb}\n{out}"})
+                    agent._log_message("system", f"[tool] {verb}\n{out}", {"source": "semi_tool"})
+                    actions_log.append(f"run:{verb}")
+                    ran_tool = True
+        except Exception as e:
+            _print(f"[tool] error: {e}")
+
+        # Heuristic fallbacks: trigger common tools based on goal/reply
+        if not ran_tool:
+            try:
+                gl = (goal or "").lower()
+                rl = (reply or "").lower()
+                # FS list
+                wants_list = ("/fs_list" in gl) or ("/fs_list" in rl) or ("list files" in gl) or ("analyse the directory" in gl) or ("analyze the directory" in gl)
+                if wants_list and "/fs_list" in plugin_commands:
+                    roots = (os.environ.get("QJSON_FS_ROOTS") or os.getcwd()).split(os.pathsep)
+                    base = roots[0] if roots and roots[0] else os.getcwd()
+                    os.environ["QJSON_AGENT_ID"] = agent.agent_id
+                    out = plugin_commands["/fs_list"](base, "max=100")
+                    if isinstance(out, str) and ("path not allowed" in out or "invalid path" in out):
+                        base2 = os.getcwd()
+                        out = plugin_commands["/fs_list"](base2, "max=100")
+                        base = base2
+                    _print(f"[tool:auto] /fs_list {base} ->\n{out}")
+                    tool_context_msgs.append({"role": "system", "content": f"[tool] /fs_list {base}\n{out}"})
+                    agent._log_message("system", f"[tool] /fs_list {base}\n{out}", {"source": "semi_tool_auto"})
+                    ran_tool = True
+                # Git status
+                if (not ran_tool) and ("git status" in gl or "repo status" in gl or "/git_status" in gl) and ("/git_status" in plugin_commands):
+                    os.environ["QJSON_AGENT_ID"] = agent.agent_id
+                    out = plugin_commands["/git_status"]("short=1")
+                    _print(f"[tool:auto] /git_status short=1 ->\n{out}")
+                    tool_context_msgs.append({"role": "system", "content": f"[tool] /git_status short=1\n{out}"})
+                    agent._log_message("system", f"[tool] /git_status short=1\n{out}", {"source": "semi_tool_auto"})
+                    actions_log.append("auto:/git_status")
+                    ran_tool = True
+                # Open/read a file if mentioned
+                if not ran_tool and "/fs_read" in plugin_commands:
+                    m = re.search(r"(open|read)\s+([\w./\\-]+\.(?:md|txt|py|json|jsonl))", gl)
+                    if not m:
+                        m = re.search(r"(open|read)\s+([\w./\\-]+\.(?:md|txt|py|json|jsonl))", rl)
+                    if m:
+                        path = m.group(2)
+                        os.environ["QJSON_AGENT_ID"] = agent.agent_id
+                        out = plugin_commands["/fs_read"](path, "max_bytes=12000")
+                        _print(f"[tool:auto] /fs_read {path} ->\n{(out if isinstance(out,str) else str(out))[:8000]}")
+                        tool_context_msgs.append({"role": "system", "content": f"[tool] /fs_read {path}\n{(out if isinstance(out,str) else str(out))[:4000]}"})
+                        agent._log_message("system", f"[tool] /fs_read {path}\n{(out if isinstance(out,str) else str(out))[:4000]}", {"source": "semi_tool_auto"})
+                        actions_log.append("auto:/fs_read")
+                        ran_tool = True
+                # DB heuristic: list tables or open db
+                if not ran_tool:
+                    wants_tables = ("list tables" in gl) or ("/sql_tables" in gl) or ("list tables" in rl) or ("/sql_tables" in rl)
+                    if wants_tables and ("/sql_tables" in plugin_commands):
+                        # try to open a db if a path appears
+                        mdb = re.search(r"open\s+db\s+([\w./\\-]+\.db)", gl) or re.search(r"open\s+db\s+([\w./\\-]+\.db)", rl)
+                        if mdb and ("/sql_open" in plugin_commands):
+                            try:
+                                plugin_commands["/sql_open"](mdb.group(1), "ro=1")
+                                actions_log.append("auto:/sql_open")
+                            except Exception:
+                                pass
+                        try:
+                            out = plugin_commands["/sql_tables"]()
+                            _print(f"[tool:auto] /sql_tables ->\n{out}")
+                            tool_context_msgs.append({"role": "system", "content": f"[tool] /sql_tables\n{out}"})
+                            agent._log_message("system", f"[tool] /sql_tables\n{out}", {"source": "semi_tool_auto"})
+                            actions_log.append("auto:/sql_tables")
+                            ran_tool = True
+                        except Exception:
+                            pass
+                # API heuristic: detect a URL and GET it (if net allowed)
+                if not ran_tool and os.environ.get("QJSON_ALLOW_NET") == "1" and ("/api_get" in plugin_commands):
+                    murl = re.search(r"https?://\S+", gl) or re.search(r"https?://\S+", rl)
+                    if murl:
+                        url = murl.group(0)
+                        try:
+                            out = plugin_commands["/api_get"](url)
+                            _print(f"[tool:auto] /api_get {url} ->\n{out}")
+                            tool_context_msgs.append({"role": "system", "content": f"[tool] /api_get {url}\n{out}"})
+                            agent._log_message("system", f"[tool] /api_get {url}\n{out}", {"source": "semi_tool_auto"})
+                            actions_log.append("auto:/api_get")
+                            ran_tool = True
+                        except Exception:
+                            pass
+            except Exception:
+                pass
         low = (reply or "").lower()
-        if (stop_token and stop_token in low) or ("need more information" in low) or ("clarify" in low and "need" in low):
-            _print("[semi] early stop: agent requested more information.")
-            break
+        # Early stop when agent asks for more info, or explicitly marks completion
+        if (stop_token and stop_token in low) or ("need more information" in low) or ("clarify" in low and "need" in low) or ("task complete" in low) or ("task completed" in low) or ("summary complete" in low):
+            if getattr(args, "interactive", False):
+                more = input("[semi] Agent requests more info. Provide details (or press Enter to stop): ").strip()
+                if more:
+                    try:
+                        clar = agent.chat_turn(more, client=llm_client, model_override=model_override, extra_system=extra_hint, extra_context=tool_context_msgs[-4:])
+                        _print(f"{agent.agent_id} > {clar}\n")
+                    except Exception as e:
+                        _print(f"[error] {e}")
+                else:
+                    _print("[semi] early stop: no additional info provided.")
+                    break
+            else:
+                if ("task complete" in low) or ("task completed" in low) or ("summary complete" in low):
+                    _print("[semi] stop: agent marked task complete.")
+                else:
+                    _print("[semi] early stop: agent requested more information.")
+                break
         if delay > 0:
             time.sleep(delay)
 
@@ -3373,6 +3676,13 @@ def cmd_exec(args: argparse.Namespace, default_api: Any = None) -> int:
 
     # Built-ins: /setenv, /langsearch
 
+    if command == "/plugins":
+        try:
+            _print(_plugin_summary_line())
+        except Exception:
+            _print("[plugins] summary unavailable")
+        return 0
+
     if command == "/setenv":
         arg = raw.replace("/setenv", "", 1).strip()
         if "=" not in arg:
@@ -3758,6 +4068,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     sp.add_argument("--goal", required=False, default="execute the task", help="Semi-autonomous goal")
     sp.add_argument("--iterations", type=int, default=3, help="Max iterations")
     sp.add_argument("--delay", type=float, default=0.0, help="Delay between iterations")
+    sp.add_argument("--max-tokens", type=int, default=None, help="Cap tokens per reply (num_predict)")
     sp.add_argument("--plugins", required=False, help="Comma-separated whitelist of plugin commands (e.g., /fs_list,/py,/git_status)")
     sp.add_argument("--stop-token", dest="stop_token", required=False, help="Early stop token (default 'need more info')")
     # Optional env gates
@@ -3766,6 +4077,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     sp.add_argument("--fs-roots", required=False, help="Set QJSON_FS_ROOTS")
     sp.add_argument("--fs-write", action="store_true", help="Enable QJSON_FS_WRITE=1")
     sp.add_argument("--git-root", required=False, help="Set QJSON_GIT_ROOT")
+    sp.add_argument("--interactive", action="store_true", help="Prompt for user input when agent requests more info")
     sp.set_defaults(func=cmd_semi)
 
     sp = sub.add_parser("models", help="List installed Ollama models via /api/tags")

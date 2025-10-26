@@ -1420,9 +1420,11 @@ def _custom_mode_wizard() -> None:
     # Goal & loop settings
     goal = _ask("Goal", required=False, default="execute the task using selected tools")
     iters = _ask("Iterations", required=False, default="3")
+    max_tokens = _ask("Max tokens per reply (optional)", required=False, default="")
     delay = _ask("Delay seconds", required=False, default="0.0")
     stop_token = _ask("Stop token (default 'need more info')", required=False, default="need more info")
     model = _select_from_list("Select model (optional)", _get_ollama_models(), allow_empty=True, default_idx=0)
+    interactive = _ask("Continue interactively if agent asks for more info? (Y/n)", required=False, default="Y")
     # Launch semi mode
     argv = [
         "semi", "--id", agent_id,
@@ -1435,6 +1437,10 @@ def _custom_mode_wizard() -> None:
         argv += ["--manifest", manifest]
     if model:
         argv += ["--model", model]
+    if not interactive.strip().lower().startswith("n"):
+        argv.append("--interactive")
+    if max_tokens.strip():
+        argv += ["--max-tokens", max_tokens.strip()]
     _execute_command(argv)
 
 

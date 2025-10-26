@@ -198,6 +198,62 @@ The QJSON Agents project provides a powerful and flexible platform for building,
   - `QJSON_LOCAL_SEARCH_MAX_FILES` cap (default 5000).
 - Results: up to `QJSON_WEB_TOPK`, each with `title` (relative path), `url` (path), `snippet`.
 
+### 7.5 Safety, Caps, and Provenance
+- Timeouts and size caps: `QJSON_WEBOPEN_TIMEOUT`, `QJSON_WEBOPEN_MAX_BYTES`, `QJSON_WEBOPEN_CAP` prevent oversized fetches.
+- Mode policy: `QJSON_WEBOPEN_DEFAULT=text|raw` controls whether HTML is outlined to text or injected raw; one‑shot override via `QJSON_WEBOPEN_MODE_ONCE`.
+- Acknowledgements: The CLI prints and injects concise provenance banners (headers + snippets) so users can trace and verify sources.
+
+## 8. Plugin System Deep Dive (Built‑ins + Advanced)
+
+### 8.1 Built‑ins (Gated, Minimal Dependencies)
+- File System (`filesystem_plugin.py`)
+  - `/fs_list <PATH> [glob=PAT] [max=N]` — list files/dirs within FS roots.
+  - `/fs_read <PATH> [max_bytes=N]` — read a file with byte cap.
+  - `/fs_write <PATH> <TEXT|@file> [append=1]` — gated by `QJSON_FS_WRITE=1` and restricted to `QJSON_FS_ROOTS`.
+- Python Exec (`exec_plugin.py`)
+  - `/py <CODE...>|@file.py` — gated by `QJSON_ALLOW_EXEC=1`; timeout via `QJSON_EXEC_TIMEOUT`.
+- SQLite DB (`db_plugin.py`)
+  - `/sql_open <PATH> [ro=1]`, `/sql_query <SQL> [max=N] [json=1]`, `/sql_tables`, `/sql_close`.
+  - Single in‑process connection for reliability across commands.
+- Git (read‑only) (`git_plugin.py`)
+  - `/git_status [short=1]`, `/git_log [N]`, `/git_diff [PATH]`; root via `QJSON_GIT_ROOT`.
+- Generic API (`api_plugin.py`)
+  - `/api_get <URL> [h:K=V ...]`, `/api_post <URL> body='...' [ct=...] [h:K=V ...]` — gated by `QJSON_ALLOW_NET=1`.
+
+Security posture: All write/exec/network capabilities are opt‑in via environment gates. FS paths are validated against `QJSON_FS_ROOTS`. Git commands are read‑only.
+
+### 8.2 Advanced Plugins (Research + Orchestration)
+- Swarm‑Forge (`swarm_forge_plugin.py`)
+  - `/forge create <AGENT_ID> [role=...] [model=...] [goal=...] [plugins=...]` — programmatically create specialized agents.
+  - `/forge info <AGENT_ID>` — inspect persona snapshot, runtime model, and enabled plugins.
+  - Enables dynamic swarms tuned to specific goals.
+- Cognitive‑Prism (`cognitive_prism_plugin.py`)
+  - `/prism <QUESTION> [hats=optimist,pessimist,creative]` — multi‑persona reflection; aggregates perspectives into a synthesis.
+- Meme‑Weaver (`meme_weaver_plugin.py`)
+  - `/meme analyze <TOPIC>` — extract trends and narratives; returns structured signals.
+  - `/meme generate text <TOPIC> [style=humor] [format=tweet|post]` — create engaging content artifacts locally.
+- Holistic‑Scribe (`holistic_scribe_plugin.py`)
+  - `/kg add_node id=... label=...`, `/kg add_edge src=... dst=... type=...`, `/kg stats` — lightweight knowledge graph over Fractal Memory.
+- Continuum (`continuum_plugin.py`)
+  - `/continuum export <AGENT_ID> path=<DIR>` and `/continuum import <TAR> new_id=<ID>` — package and transfer state, memory, persona.
+
+All advanced plugins operate fully locally by default. They integrate tightly with the Fractal Memory and persona manifests to preserve provenance and state.
+
+### 8.3 Semi‑Autonomous Mode and Tool Protocol
+- Semi mode (`qjson_agents cli semi`) provides a tool‑first loop with a strict protocol:
+  - Start replies with a single slash command if a tool is appropriate; do not fabricate outputs; propose next steps after tools run.
+  - The model is reminded each tick of allowed tools, FS roots, and recent actions so it remains context‑aware across iterations.
+  - Early‑stop tokens: the loop stops when the model says “need more info” or clearly marks “task complete”.
+- Heuristics: when the model omits tools, semi triggers useful fallbacks (e.g., `/fs_list`, `/git_status`, file `/fs_read`); optional DB/API heuristics when appropriate.
+
+### 8.4 Testing Strategy (Plugins and Semi)
+- Unit + smoke tests cover:
+  - FS/Exec/DB/Git/API built‑ins (gates, caps, and happy paths).
+  - Advanced plugins (forge/prism/meme/kg/continuum) in isolated flows.
+  - Web search normalization and local search fallbacks.
+  - Semi‑mode pre‑run commands, early‑stop, and recent action headers.
+- Tests are network‑free by default and patch external calls; API tests assert graceful gating when `QJSON_ALLOW_NET` is off.
+
 ### 7.5 Crawler Internals (Online BFS)
 - Class: `web_crawler.Crawler(rate_per_host=QJSON_CRAWL_RATE)` with per‑host rate limiting and `robots.txt` policy (`urllib.robotparser`).
 - BFS frontier of `(url, depth)` pairs up to `max_depth` and `max_pages`.

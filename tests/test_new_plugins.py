@@ -56,21 +56,29 @@ def test_exec_plugin_gating(tmp_path: Path):
 
 
 def test_sqlite_plugin(tmp_path: Path):
+    # Use the plugin in-process so connection state is preserved
+    import importlib.util as _ilu
+    p = Path("qjson_agents/plugins/db_plugin.py").resolve()
+    spec = _ilu.spec_from_file_location("db_plugin", str(p))
+    mod = _ilu.module_from_spec(spec)  # type: ignore
+    assert spec and spec.loader
+    spec.loader.exec_module(mod)  # type: ignore
+    SQLitePlugin = getattr(mod, "SQLitePlugin")
+
     db = tmp_path / "test.db"
     con = sqlite3.connect(db)
     con.execute("create table t(id integer, name text);")
     con.executemany("insert into t(id,name) values(?,?)", [(1, "a"), (2, "b")])
-    con.commit()
-    con.close()
+    con.commit(); con.close()
 
-    r = run_exec(f"/sql_open {db} ro=1")
-    assert "opened" in r.stdout
-    r = run_exec("/sql_tables")
-    assert "t" in r.stdout
-    r = run_exec("/sql_query select name from t order by id json=1 max=10")
-    # Should be JSON string
-    obj = json.loads(r.stdout)
-    assert obj["columns"] == ["name"] or "columns" in obj
+    pl = SQLitePlugin()
+    out = pl.sql_open(str(db), "ro=1")
+    assert "opened" in out
+    out = pl.sql_tables()
+    assert "t" in out
+    out = pl.sql_query("select", "name", "from", "t", "order", "by", "id", "json=1", "max=10")
+    obj = json.loads(out)
+    assert obj.get("columns") == ["name"] or "columns" in obj
     rows = obj.get("rows") or []
     assert any(isinstance(x, dict) for x in rows)
 
@@ -103,4 +111,3 @@ def test_git_plugin(tmp_path: Path):
 def test_api_plugin_gated():
     r = run_exec("/api_get https://example.com")
     assert "network disabled" in r.stdout
-

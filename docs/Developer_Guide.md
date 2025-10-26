@@ -53,3 +53,15 @@ CI validation modes
 - Make invalid files warn-only: append `|| echo "warn: validation failed"` and `|| true` to each validate command.
 - Example (warn-only):
   - `python -m qjson_agents.cli validate --dir logs --glob "cluster_run_*.json" --schema cluster-run || echo "warn: invalid cluster_run logs" || true`
+- Keystone personas
+- Added under `personas/` as YSONX manifests you can load with `--manifest`:
+  - `personas/DevOpsAgent.ysonx` — devops/CI archetype. Use `/git_*`, `/fs_*`, `/py`, and optionally `/api_*`.
+  - `personas/ResearchAgent.ysonx` — research archetype. Use `/api_*` (gated), `/kg` (Holistic‑Scribe), `/prism`.
+  - `personas/SwarmLord.ysonx` — orchestrator archetype. Use `/forge` to create/manage child agents.
+
+Multi‑plugin demo
+- Script: `scripts/devops_workflow_demo.sh` spins up a temp git repo and runs:
+  - `/git_diff` on a newly added file
+  - `/fs_read` to preview it
+  - `/py @file.py` to execute (QJSON_ALLOW_EXEC=1)
+  - Optionally `/api_post` to a mock webhook when `QJSON_ALLOW_NET=1`

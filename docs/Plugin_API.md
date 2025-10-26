@@ -73,3 +73,21 @@ Built‑in plugins (usage + safety)
   - `/api_get <URL> [h:K=V ...] [timeout=N] [max=N]`
   - `/api_post <URL> body='{}' [ct=application/json] [h:K=V ...] [timeout=N] [max=N]`
   - Safety: requires `QJSON_ALLOW_NET=1`. Timeout defaults 6s. Response preview capped (~4k chars).
+- Swarm‑Forge — `qjson_agents/plugins/swarm_forge_plugin.py`
+  - `/forge create <ID> [role=... model=... goal=... plugins=a,b]` — write normalized manifest to state/
+  - `/forge plugins <ID> set=a,b | add=a,b | del=a` — manage advisory runtime.plugins list
+  - `/forge goal <ID> <TEXT>`, `/forge info <ID>` — inspect/adjust manifest fields
+  - `/forge delegate <ID> <TASK...>` — enqueue a task in child’s FMM (`tasks/queue`) and add a retrieval note
+  - `/forge report <ID>` — quick summary of queued tasks
+
+- Cognitive‑Prism — `qjson_agents/plugins/cognitive_prism_plugin.py`
+  - `/prism <QUESTION...> [hats=a,b,c|auto]` — hard‑coded set or `auto` dynamic generation
+
+- Holistic‑Scribe — `qjson_agents/plugins/holistic_scribe_plugin.py`
+  - `/kg add_node id=<ID> label=<LABEL> [tags=a,b] [data='{}']`
+  - `/kg add_edge src=<ID> dst=<ID> type=<TYPE> [weight=1.0] [data='{}']`
+  - `/kg stats`, `/kg export mermaid <PATH>`
+
+- Continuum — `qjson_agents/plugins/continuum_plugin.py`
+  - `/continuum export <AGENT_ID> path=<DIR>` → `<ID>.tar.gz` (manifest/memory/events/fmm)
+  - `/continuum import <TAR.GZ> new_id=<ID>` → restore bundle into state/

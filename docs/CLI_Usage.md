@@ -81,10 +81,13 @@ Slash commands (highlights)
 - /langsearch key <KEY> — set and persist LangSearch API key
 - /engine_scope show|add|set|clear — configure local roots for offline search
 - /truth on|off (inject a short locally‑truthful note)
-Plugin commands (built‑in)
-- /fs_list [PATH] [glob=PAT] [max=N] — list files (roots: QJSON_FS_ROOTS)
-- /fs_read <PATH> [max_bytes=N] — read file (roots: QJSON_FS_ROOTS)
+-Plugin commands (built‑in)
+- /fs_list [PATH] [glob=PAT] [max=N] — list files (roots: QJSON_FS_ROOTS); aliases: /fs_ls
+- /fs_tree [PATH] [depth=N] [max=N] — recursive directory tree preview
+- /fs_cd <PATH>, /fs_pwd — change/print current working directory (stateful per session)
+- /fs_read|/fs_open <PATH> [max_bytes=N] — read file
 - /fs_write <PATH> <TEXT|@file> [append=1] — gated by QJSON_FS_WRITE=1
+- /fs_find <NAME or glob> [max=N] [base=PATH] — find files under base
 - /py <CODE...>|@file.py — gated by QJSON_ALLOW_EXEC=1; timeout QJSON_EXEC_TIMEOUT
 - /sql_open <PATH> [ro=1], /sql_tables, /sql_query <SQL> [max=N] [json=1], /sql_close — SQLite only; per‑process connection
 - /git_status [short=1], /git_log [N], /git_diff [PATH] — read‑only; repo root via QJSON_GIT_ROOT
