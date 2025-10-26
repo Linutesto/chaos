@@ -49,6 +49,53 @@ Quickstart
 5. `qjson-agents /crawl https://example.com depth=1 pages=10`
 6. Ask: “Extract the timeline.”
 
+Capabilities
+
+- Local-First Agents
+  - Deterministic personas (QJSON/YSONX), optional logic hooks (assist/replace).
+  - Durable logs: `state/<ID>/memory.jsonl`, `events.jsonl`, cluster index (`state/index.json`).
+  - Fractal Memory store (`fmm.json`) with hierarchical paths and provenance.
+
+- Memory & Retrieval
+  - SQLite store for text + embeddings; IVF-like acceleration persisted in fractal store.
+  - Embedding cascade: Ollama → deterministic hash fallback (optional transformers).
+  - Tunables: top‑k, min‑score, time‑decay, IVF K/nprobe, auto‑reindex threshold.
+
+- Unified Search & Crawl
+  - `/engine mode=online|local` sets default behavior for search.
+  - `/find <query|urls…>`: web search, local file search, or BFS crawl (robots‑aware, rate‑limited).
+  - `/open N [raw|text] [ingest]`: fetch result content with caps; outline HTML to clean text; optional indexing.
+
+- Built‑in Tools (Plugins)
+  - File System: `/fs_list`, `/fs_read`, `/fs_write` (write gated; FS roots whitelist).
+  - Exec: `/py <code|@file.py>` (gated, timeout).
+  - SQLite DB: `/sql_open`, `/sql_query`, `/sql_tables`, `/sql_close`.
+  - Git (read‑only): `/git_status`, `/git_log`, `/git_diff`.
+  - API (gated): `/api_get`, `/api_post`.
+  - Importers: `/confluence_import`, `/sharepoint_import` (HTML/MD/TXT to clean outlines + index).
+
+- Advanced Plugins
+  - Swarm‑Forge: `/forge create|info` for programmatic agent creation.
+  - Cognitive‑Prism: `/prism <question> [hats=…]` multi‑persona analysis.
+  - Meme‑Weaver: `/meme analyze|generate` trend analysis and content generation (local-first).
+  - Holistic‑Scribe: `/kg add_node|add_edge|stats` lightweight knowledge graph over FMM.
+  - Continuum: `/continuum export|import` portable agent state packs.
+
+- Semi‑Autonomous Mode
+  - Strict tool protocol (emit one tool line first; don’t fabricate outputs).
+  - Heuristic fallbacks (FS list, file open, git status; DB/API hints).
+  - Early‑stop tokens: “need more info”, “task complete”; recent‑actions header.
+
+- Security & Privacy
+  - Default‑deny gates: `QJSON_ALLOW_EXEC`, `QJSON_ALLOW_NET`, `QJSON_FS_WRITE` off unless set.
+  - FS path safety via `QJSON_FS_ROOTS`; Git root via `QJSON_GIT_ROOT`.
+  - Web caps: `QJSON_WEBOPEN_TIMEOUT`, `QJSON_WEBOPEN_MAX_BYTES`, `QJSON_WEBOPEN_CAP`; outline‑by‑default for HTML.
+
+- CLI UX & Menus
+  - Chat: interactive with slash commands; Exec: one‑shot commands; Semi: guided loops.
+  - Menus: Plugins & Tools hub; Keystone personas; Custom Agent Mode wizard.
+  - Persistent settings: small env store under `state/env.json`.
+
 Badges
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python Version](https://img.shields.io/badge/python-3.10+-blue.svg)
