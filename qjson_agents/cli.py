@@ -275,6 +275,14 @@ def _arm_webopen_from_results(index: int, results_json: str, *, cap_chars: int |
         cap = 12000
     to = timeout_s if timeout_s is not None else float(os.environ.get("QJSON_WEBOPEN_TIMEOUT", "6"))
     mb = max_bytes if max_bytes is not None else int(os.environ.get("QJSON_WEBOPEN_MAX_BYTES", str(200 * 1024)))
+    # Tiny progress note so users see immediate feedback during network fetches
+    try:
+        if url:
+            _print(f"[open] fetching… {url}")
+        else:
+            _print("[open] fetching…")
+    except Exception:
+        pass
     text, ctype = _fetch_url(url, timeout=to, max_bytes=mb)
     # If HTML, try to extract a clean outline/text for injection
     # One-shot override or default mode. Default is 'text' (outline extraction).
